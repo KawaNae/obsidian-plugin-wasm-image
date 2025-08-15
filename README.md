@@ -15,12 +15,19 @@ A fast, efficient image conversion plugin for Obsidian that converts images to W
 
 ### Manual Installation
 
-1. Download the latest release files:
+1. Go to the [Releases page](https://github.com/KawaNae/obsidian-plugin-wasm-image/releases)
+2. Download the latest release files:
    - `main.js`
    - `manifest.json`
-2. Create a folder named `obsidian-wasm-image` in your vault's `.obsidian/plugins/` directory
-3. Place the downloaded files in this folder
-4. Reload Obsidian and enable the plugin in Settings → Community plugins
+3. Create a folder named `obsidian-wasm-image` in your vault's `.obsidian/plugins/` directory
+4. Place the downloaded files in this folder
+5. Reload Obsidian and enable the plugin in Settings → Community plugins
+
+### BRAT Installation (Beta Reviewer's Auto-update Tool)
+
+If you have BRAT installed:
+1. Add this repository: `KawaNae/obsidian-plugin-wasm-image`
+2. BRAT will automatically download and install the plugin
 
 ## Usage
 
