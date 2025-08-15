@@ -3135,18 +3135,30 @@ async function openImageConverterModal(app, baseSettings) {
       boxShadow: "0 4px 20px rgba(0,0,0,0.3)"
     });
     const title = document.createElement("h3");
-    title.textContent = "Image to WebP Converter (WASM)";
+    title.textContent = "WASM Image Converter";
+    title.style.marginTop = "0";
     title.style.marginBottom = "15px";
     modal.appendChild(title);
+    const mainContent = document.createElement("div");
+    mainContent.style.display = "flex";
+    mainContent.style.gap = "30px";
+    mainContent.style.marginBottom = "20px";
+    mainContent.style.flexWrap = "nowrap";
+    const leftColumn = document.createElement("div");
+    leftColumn.style.flex = "1";
+    leftColumn.style.minWidth = "200px";
     const dropZone = document.createElement("div");
     Object.assign(dropZone.style, {
       border: "2px dashed var(--background-modifier-border)",
       borderRadius: "8px",
       padding: "40px",
       textAlign: "center",
-      marginBottom: "15px",
       cursor: "pointer",
-      transition: "border-color 0.3s ease"
+      transition: "border-color 0.3s ease",
+      minHeight: "200px",
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "center"
     });
     dropZone.innerHTML = `
       <div style="font-size: 48px; margin-bottom: 10px;">\u{1F4F7}</div>
@@ -3155,13 +3167,21 @@ async function openImageConverterModal(app, baseSettings) {
         Supported: JPG, PNG, GIF, BMP, TIFF
       </div>
     `;
-    modal.appendChild(dropZone);
-    const panel = document.createElement("div");
-    panel.style.marginBottom = "15px";
+    const clipboardBtn = document.createElement("button");
+    clipboardBtn.textContent = "\u{1F4CB} Paste from Clipboard";
+    clipboardBtn.style.fontSize = "14px";
+    clipboardBtn.style.padding = "8px 12px";
+    clipboardBtn.style.marginTop = "10px";
+    clipboardBtn.style.width = "100%";
+    leftColumn.appendChild(dropZone);
+    leftColumn.appendChild(clipboardBtn);
+    const rightColumn = document.createElement("div");
+    rightColumn.style.flexShrink = "0";
     const qualityLabel = document.createElement("label");
-    qualityLabel.textContent = "Quality (0.1 - 1.0): ";
+    qualityLabel.textContent = "Quality:";
     qualityLabel.style.display = "block";
     qualityLabel.style.marginBottom = "5px";
+    qualityLabel.style.fontSize = "14px";
     const qualityInput = document.createElement("input");
     qualityInput.type = "number";
     qualityInput.min = "0.1";
@@ -3169,57 +3189,67 @@ async function openImageConverterModal(app, baseSettings) {
     qualityInput.step = "0.1";
     qualityInput.value = String(settings.quality);
     qualityInput.style.width = "100px";
+    qualityInput.style.fontSize = "14px";
+    qualityInput.style.marginBottom = "15px";
     const resizeRow = document.createElement("div");
     resizeRow.style.display = "flex";
     resizeRow.style.alignItems = "center";
-    resizeRow.style.marginTop = "10px";
-    resizeRow.style.flexWrap = "wrap";
+    resizeRow.style.marginBottom = "15px";
     resizeRow.style.gap = "8px";
-    resizeRow.style.fontSize = "14px";
     const resizeCheckbox = document.createElement("input");
     resizeCheckbox.type = "checkbox";
     resizeCheckbox.checked = settings.enableResize;
     resizeCheckbox.id = "enableResize";
-    resizeCheckbox.style.marginRight = "8px";
     const resizeText = document.createElement("label");
     resizeText.htmlFor = "enableResize";
-    resizeText.textContent = "Resize to max";
+    resizeText.textContent = "Resize";
     resizeText.style.cursor = "pointer";
+    resizeText.style.fontSize = "14px";
+    resizeRow.appendChild(resizeCheckbox);
+    resizeRow.appendChild(resizeText);
+    const maxWidthLabel = document.createElement("label");
+    maxWidthLabel.textContent = "Max Width:";
+    maxWidthLabel.style.display = "block";
+    maxWidthLabel.style.marginBottom = "5px";
+    maxWidthLabel.style.fontSize = "14px";
     const maxW = document.createElement("input");
     maxW.type = "number";
     maxW.min = "100";
     maxW.max = "5000";
     maxW.value = String(settings.maxWidth);
-    maxW.style.width = "70px";
+    maxW.style.width = "100px";
     maxW.style.fontSize = "14px";
+    maxW.style.marginBottom = "15px";
     maxW.placeholder = "1920";
-    const xLabel = document.createElement("span");
-    xLabel.textContent = "\xD7";
-    xLabel.style.margin = "0 4px";
-    xLabel.style.fontSize = "14px";
+    const maxHeightLabel = document.createElement("label");
+    maxHeightLabel.textContent = "Max Height:";
+    maxHeightLabel.style.display = "block";
+    maxHeightLabel.style.marginBottom = "5px";
+    maxHeightLabel.style.fontSize = "14px";
     const maxH = document.createElement("input");
     maxH.type = "number";
     maxH.min = "100";
     maxH.max = "5000";
     maxH.value = String(settings.maxHeight);
-    maxH.style.width = "70px";
+    maxH.style.width = "100px";
     maxH.style.fontSize = "14px";
+    maxH.style.marginBottom = "15px";
     maxH.placeholder = "1080";
     const folderInfo = document.createElement("div");
     folderInfo.style.fontSize = "12px";
     folderInfo.style.color = "var(--text-muted)";
-    folderInfo.style.marginTop = "10px";
     folderInfo.textContent = `Save to: ${settings.attachmentFolder}/`;
-    resizeRow.appendChild(resizeCheckbox);
-    resizeRow.appendChild(resizeText);
-    resizeRow.appendChild(maxW);
-    resizeRow.appendChild(xLabel);
-    resizeRow.appendChild(maxH);
-    panel.appendChild(qualityLabel);
-    panel.appendChild(qualityInput);
-    panel.appendChild(resizeRow);
-    panel.appendChild(folderInfo);
-    modal.appendChild(panel);
+    rightColumn.appendChild(qualityLabel);
+    rightColumn.appendChild(qualityInput);
+    rightColumn.appendChild(resizeRow);
+    rightColumn.appendChild(maxWidthLabel);
+    rightColumn.appendChild(maxW);
+    rightColumn.appendChild(maxHeightLabel);
+    rightColumn.appendChild(maxH);
+    rightColumn.appendChild(folderInfo);
+    mainContent.appendChild(leftColumn);
+    mainContent.appendChild(rightColumn);
+    modal.appendChild(mainContent);
     const preview = document.createElement("div");
     preview.style.marginBottom = "15px";
     modal.appendChild(preview);
@@ -3229,10 +3259,6 @@ async function openImageConverterModal(app, baseSettings) {
     btnRow.style.gap = "8px";
     btnRow.style.justifyContent = "flex-end";
     btnRow.style.alignItems = "center";
-    const clipboardBtn = document.createElement("button");
-    clipboardBtn.textContent = "\u{1F4CB} Paste from Clipboard";
-    clipboardBtn.style.fontSize = "14px";
-    clipboardBtn.style.padding = "8px 12px";
     const convertBtn = document.createElement("button");
     convertBtn.textContent = "Convert & Insert";
     convertBtn.disabled = true;
@@ -3242,7 +3268,6 @@ async function openImageConverterModal(app, baseSettings) {
     cancelBtn.textContent = "Cancel";
     cancelBtn.style.fontSize = "14px";
     cancelBtn.style.padding = "8px 12px";
-    btnRow.appendChild(clipboardBtn);
     btnRow.appendChild(convertBtn);
     btnRow.appendChild(cancelBtn);
     modal.appendChild(btnRow);
