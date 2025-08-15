@@ -13,7 +13,10 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
       top: "50%",
       left: "50%",
       transform: "translate(-50%, -50%)",
-      width: "500px",
+      width: "min(500px, 90vw)",
+      maxWidth: "500px",
+      maxHeight: "90vh",
+      overflowY: "auto",
       background: "var(--background-primary)",
       border: "1px solid var(--background-modifier-border)",
       borderRadius: "8px",
@@ -70,7 +73,8 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
     resizeRow.style.alignItems = "center";
     resizeRow.style.marginTop = "10px";
     resizeRow.style.flexWrap = "wrap";
-    resizeRow.style.gap = "10px";
+    resizeRow.style.gap = "8px";
+    resizeRow.style.fontSize = "14px";
 
     const resizeCheckbox = document.createElement("input");
     resizeCheckbox.type = "checkbox";
@@ -88,19 +92,22 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
     maxW.min = "100";
     maxW.max = "5000";
     maxW.value = String(settings.maxWidth);
-    maxW.style.width = "80px";
+    maxW.style.width = "70px";
+    maxW.style.fontSize = "14px";
     maxW.placeholder = "1920";
 
     const xLabel = document.createElement("span");
-    xLabel.textContent = "x";
-    xLabel.style.margin = "0 5px";
+    xLabel.textContent = "×";
+    xLabel.style.margin = "0 4px";
+    xLabel.style.fontSize = "14px";
 
     const maxH = document.createElement("input");
     maxH.type = "number";
     maxH.min = "100";
     maxH.max = "5000";
     maxH.value = String(settings.maxHeight);
-    maxH.style.width = "80px";
+    maxH.style.width = "70px";
+    maxH.style.fontSize = "14px";
     maxH.placeholder = "1080";
 
     const folderInfo = document.createElement("div");
@@ -128,19 +135,27 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
 
     // ===== Buttons =====
     const btnRow = document.createElement("div");
-    btnRow.style.textAlign = "right";
+    btnRow.style.display = "flex";
+    btnRow.style.flexWrap = "wrap";
+    btnRow.style.gap = "8px";
+    btnRow.style.justifyContent = "flex-end";
+    btnRow.style.alignItems = "center";
 
     const clipboardBtn = document.createElement("button");
     clipboardBtn.textContent = "📋 Paste from Clipboard";
-    clipboardBtn.style.marginRight = "10px";
+    clipboardBtn.style.fontSize = "14px";
+    clipboardBtn.style.padding = "8px 12px";
 
     const convertBtn = document.createElement("button");
     convertBtn.textContent = "Convert & Insert";
     convertBtn.disabled = true;
-    convertBtn.style.marginRight = "10px";
+    convertBtn.style.fontSize = "14px";
+    convertBtn.style.padding = "8px 12px";
 
     const cancelBtn = document.createElement("button");
     cancelBtn.textContent = "Cancel";
+    cancelBtn.style.fontSize = "14px";
+    cancelBtn.style.padding = "8px 12px";
 
     btnRow.appendChild(clipboardBtn);
     btnRow.appendChild(convertBtn);
@@ -276,21 +291,23 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
     // 画面に追加して起動
     document.body.appendChild(modal);
 
-    // 起動時にクリップボードを軽く確認（失敗しても黙って続行）
-    (async () => {
-      try {
-        const items = await (navigator as any).clipboard.read();
-        for (const it of items) {
-          for (const t of it.types) {
-            if (t.startsWith("image/")) {
-              const blob = await it.getType(t);
-              const file = new File([blob], `clipboard-${Date.now()}.${t.split("/")[1]}`, { type: t });
-              await handleFileSelect(file);
-              return;
+    // 設定に応じて起動時クリップボードチェック
+    if (baseSettings.autoReadClipboard) {
+      (async () => {
+        try {
+          const items = await (navigator as any).clipboard.read();
+          for (const it of items) {
+            for (const t of it.types) {
+              if (t.startsWith("image/")) {
+                const blob = await it.getType(t);
+                const file = new File([blob], `clipboard-${Date.now()}.${t.split("/")[1]}`, { type: t });
+                await handleFileSelect(file);
+                return;
+              }
             }
           }
-        }
-      } catch {}
-    })();
+        } catch {}
+      })();
+    }
   });
 }

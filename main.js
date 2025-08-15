@@ -2974,7 +2974,9 @@ var DEFAULT_SETTINGS = {
   maxWidth: 1920,
   maxHeight: 1080,
   enableResize: true,
-  attachmentFolder: "Attachments"
+  attachmentFolder: "Attachments",
+  autoReadClipboard: false
+  // デフォルトはオフ（iPadでの問題回避）
 };
 
 // src/image-converter-modal.ts
@@ -3121,7 +3123,10 @@ async function openImageConverterModal(app, baseSettings) {
       top: "50%",
       left: "50%",
       transform: "translate(-50%, -50%)",
-      width: "500px",
+      width: "min(500px, 90vw)",
+      maxWidth: "500px",
+      maxHeight: "90vh",
+      overflowY: "auto",
       background: "var(--background-primary)",
       border: "1px solid var(--background-modifier-border)",
       borderRadius: "8px",
@@ -3169,7 +3174,8 @@ async function openImageConverterModal(app, baseSettings) {
     resizeRow.style.alignItems = "center";
     resizeRow.style.marginTop = "10px";
     resizeRow.style.flexWrap = "wrap";
-    resizeRow.style.gap = "10px";
+    resizeRow.style.gap = "8px";
+    resizeRow.style.fontSize = "14px";
     const resizeCheckbox = document.createElement("input");
     resizeCheckbox.type = "checkbox";
     resizeCheckbox.checked = settings.enableResize;
@@ -3184,17 +3190,20 @@ async function openImageConverterModal(app, baseSettings) {
     maxW.min = "100";
     maxW.max = "5000";
     maxW.value = String(settings.maxWidth);
-    maxW.style.width = "80px";
+    maxW.style.width = "70px";
+    maxW.style.fontSize = "14px";
     maxW.placeholder = "1920";
     const xLabel = document.createElement("span");
-    xLabel.textContent = "x";
-    xLabel.style.margin = "0 5px";
+    xLabel.textContent = "\xD7";
+    xLabel.style.margin = "0 4px";
+    xLabel.style.fontSize = "14px";
     const maxH = document.createElement("input");
     maxH.type = "number";
     maxH.min = "100";
     maxH.max = "5000";
     maxH.value = String(settings.maxHeight);
-    maxH.style.width = "80px";
+    maxH.style.width = "70px";
+    maxH.style.fontSize = "14px";
     maxH.placeholder = "1080";
     const folderInfo = document.createElement("div");
     folderInfo.style.fontSize = "12px";
@@ -3215,16 +3224,24 @@ async function openImageConverterModal(app, baseSettings) {
     preview.style.marginBottom = "15px";
     modal.appendChild(preview);
     const btnRow = document.createElement("div");
-    btnRow.style.textAlign = "right";
+    btnRow.style.display = "flex";
+    btnRow.style.flexWrap = "wrap";
+    btnRow.style.gap = "8px";
+    btnRow.style.justifyContent = "flex-end";
+    btnRow.style.alignItems = "center";
     const clipboardBtn = document.createElement("button");
     clipboardBtn.textContent = "\u{1F4CB} Paste from Clipboard";
-    clipboardBtn.style.marginRight = "10px";
+    clipboardBtn.style.fontSize = "14px";
+    clipboardBtn.style.padding = "8px 12px";
     const convertBtn = document.createElement("button");
     convertBtn.textContent = "Convert & Insert";
     convertBtn.disabled = true;
-    convertBtn.style.marginRight = "10px";
+    convertBtn.style.fontSize = "14px";
+    convertBtn.style.padding = "8px 12px";
     const cancelBtn = document.createElement("button");
     cancelBtn.textContent = "Cancel";
+    cancelBtn.style.fontSize = "14px";
+    cancelBtn.style.padding = "8px 12px";
     btnRow.appendChild(clipboardBtn);
     btnRow.appendChild(convertBtn);
     btnRow.appendChild(cancelBtn);
@@ -3335,22 +3352,24 @@ async function openImageConverterModal(app, baseSettings) {
     });
     cancelBtn.addEventListener("click", () => cleanupAndResolve(void 0));
     document.body.appendChild(modal);
-    (async () => {
-      try {
-        const items = await navigator.clipboard.read();
-        for (const it of items) {
-          for (const t of it.types) {
-            if (t.startsWith("image/")) {
-              const blob = await it.getType(t);
-              const file = new File([blob], `clipboard-${Date.now()}.${t.split("/")[1]}`, { type: t });
-              await handleFileSelect(file);
-              return;
+    if (baseSettings.autoReadClipboard) {
+      (async () => {
+        try {
+          const items = await navigator.clipboard.read();
+          for (const it of items) {
+            for (const t of it.types) {
+              if (t.startsWith("image/")) {
+                const blob = await it.getType(t);
+                const file = new File([blob], `clipboard-${Date.now()}.${t.split("/")[1]}`, { type: t });
+                await handleFileSelect(file);
+                return;
+              }
             }
           }
+        } catch {
         }
-      } catch {
-      }
-    })();
+      })();
+    }
   });
 }
 
@@ -3392,6 +3411,10 @@ var WasmImageConverterSettingTab = class extends import_obsidian2.PluginSettingT
     }));
     new import_obsidian2.Setting(containerEl).setName("Attachment folder").setDesc("Folder where converted WebP images will be saved").addText((text) => text.setPlaceholder("Attachments").setValue(this.plugin.settings.attachmentFolder).onChange(async (value) => {
       this.plugin.settings.attachmentFolder = value || "Attachments";
+      await this.plugin.saveSettings();
+    }));
+    new import_obsidian2.Setting(containerEl).setName("Auto-read clipboard on startup").setDesc("Automatically check clipboard for images when opening the converter (may show permission dialog on mobile devices)").addToggle((toggle) => toggle.setValue(this.plugin.settings.autoReadClipboard).onChange(async (value) => {
+      this.plugin.settings.autoReadClipboard = value;
       await this.plugin.saveSettings();
     }));
     containerEl.createEl("h3", { text: "Preview" });

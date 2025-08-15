@@ -79,6 +79,16 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
+    new Setting(containerEl)
+      .setName("Auto-read clipboard on startup")
+      .setDesc("Automatically check clipboard for images when opening the converter (may show permission dialog on mobile devices)")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.autoReadClipboard)
+        .onChange(async (value) => {
+          this.plugin.settings.autoReadClipboard = value;
+          await this.plugin.saveSettings();
+        }));
+
     containerEl.createEl("h3", { text: "Preview" });
     
     const previewEl = containerEl.createEl("div", { 
