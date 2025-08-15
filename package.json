@@ -1,10 +1,27 @@
 {
   "name": "obsidian-wasm-image",
+  "version": "0.0.1",
+  "description": "Fast image to WebP conversion using WebAssembly for Obsidian",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
     "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('main.js',{force:true}))\""
+  },
+  "keywords": [
+    "obsidian",
+    "plugin",
+    "webp",
+    "image",
+    "conversion",
+    "webassembly",
+    "wasm"
+  ],
+  "author": "KawaNae",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KawaNae/obsidian-plugin-wasm-image.git"
   },
   "devDependencies": {
     "esbuild": "^0.23.0"

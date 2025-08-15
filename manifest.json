@@ -1,10 +1,11 @@
 {
   "id": "obsidian-wasm-image",
-  "name": "WASM Image Convert",
-  "version": "0.0.2",
+  "name": "WASM Image Converter",
+  "version": "0.0.1",
   "minAppVersion": "1.5.0",
-  "description": "Convert images (WebP) via WebAssembly (mobile & desktop).",
-  "author": "you",
+  "description": "Fast image to WebP conversion using WebAssembly. Supports drag & drop, clipboard, and customizable settings.",
+  "author": "KawaNae",
+  "authorUrl": "https://github.com/KawaNae",
   "isDesktopOnly": false,
   "main": "main.js"
 }
