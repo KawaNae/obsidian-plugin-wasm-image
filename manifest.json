@@ -1,0 +1,10 @@
+{
+  "id": "obsidian-wasm-image",
+  "name": "WASM Image Convert",
+  "version": "0.0.2",
+  "minAppVersion": "1.5.0",
+  "description": "Convert images (WebP) via WebAssembly (mobile & desktop).",
+  "author": "you",
+  "isDesktopOnly": false,
+  "main": "main.js"
+}
