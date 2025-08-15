@@ -13,7 +13,8 @@ export default class WasmImageConverterPlugin extends Plugin {
 
     this.addCommand({
       id: "wasm-webp-open-converter",
-      name: "WASM: Image → WebP Converter",
+      name: "WASM Image Converter: Convert Image",
+      icon: "image-plus", // 他のオプション: "image", "convert", "camera", "file-image"
       callback: async () => {
         try {
           const link = await openImageConverterModal(this.app, this.settings);

@@ -3436,7 +3436,9 @@ var WasmImageConverterPlugin = class extends import_obsidian3.Plugin {
     this.addSettingTab(new WasmImageConverterSettingTab(this.app, this));
     this.addCommand({
       id: "wasm-webp-open-converter",
-      name: "WASM: Image \u2192 WebP Converter",
+      name: "WASM Image Converter: Convert Image",
+      icon: "image-plus",
+      // 他のオプション: "image", "convert", "camera", "file-image"
       callback: async () => {
         try {
           const link = await openImageConverterModal(this.app, this.settings);
