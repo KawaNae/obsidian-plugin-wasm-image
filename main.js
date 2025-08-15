@@ -2966,7 +2966,7 @@ __export(main_exports, {
   default: () => WasmImageConverterPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian2 = require("obsidian");
+var import_obsidian3 = require("obsidian");
 
 // src/settings.ts
 var DEFAULT_SETTINGS = {
@@ -3354,15 +3354,63 @@ async function openImageConverterModal(app, baseSettings) {
   });
 }
 
+// src/settings-tab.ts
+var import_obsidian2 = require("obsidian");
+var WasmImageConverterSettingTab = class extends import_obsidian2.PluginSettingTab {
+  constructor(app, plugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
+  display() {
+    const { containerEl } = this;
+    containerEl.empty();
+    containerEl.createEl("h2", { text: "WASM Image Converter Settings" });
+    new import_obsidian2.Setting(containerEl).setName("Quality").setDesc("WebP compression quality (0.1 - 1.0). Higher values mean better quality but larger files.").addText((text) => text.setPlaceholder("0.8").setValue(String(this.plugin.settings.quality)).onChange(async (value) => {
+      const numValue = parseFloat(value);
+      if (!isNaN(numValue) && numValue >= 0.1 && numValue <= 1) {
+        this.plugin.settings.quality = numValue;
+        await this.plugin.saveSettings();
+      }
+    }));
+    new import_obsidian2.Setting(containerEl).setName("Enable resize").setDesc("Automatically resize images that exceed the maximum dimensions").addToggle((toggle) => toggle.setValue(this.plugin.settings.enableResize).onChange(async (value) => {
+      this.plugin.settings.enableResize = value;
+      await this.plugin.saveSettings();
+    }));
+    new import_obsidian2.Setting(containerEl).setName("Maximum width").setDesc("Maximum width in pixels for resized images").addText((text) => text.setPlaceholder("1920").setValue(String(this.plugin.settings.maxWidth)).onChange(async (value) => {
+      const numValue = parseInt(value);
+      if (!isNaN(numValue) && numValue > 0) {
+        this.plugin.settings.maxWidth = numValue;
+        await this.plugin.saveSettings();
+      }
+    }));
+    new import_obsidian2.Setting(containerEl).setName("Maximum height").setDesc("Maximum height in pixels for resized images").addText((text) => text.setPlaceholder("1080").setValue(String(this.plugin.settings.maxHeight)).onChange(async (value) => {
+      const numValue = parseInt(value);
+      if (!isNaN(numValue) && numValue > 0) {
+        this.plugin.settings.maxHeight = numValue;
+        await this.plugin.saveSettings();
+      }
+    }));
+    new import_obsidian2.Setting(containerEl).setName("Attachment folder").setDesc("Folder where converted WebP images will be saved").addText((text) => text.setPlaceholder("Attachments").setValue(this.plugin.settings.attachmentFolder).onChange(async (value) => {
+      this.plugin.settings.attachmentFolder = value || "Attachments";
+      await this.plugin.saveSettings();
+    }));
+    containerEl.createEl("h3", { text: "Preview" });
+    const previewEl = containerEl.createEl("div", {
+      cls: "setting-item-description",
+      text: `Current settings: Quality ${(this.plugin.settings.quality * 100).toFixed(0)}%, ${this.plugin.settings.enableResize ? `Max size ${this.plugin.settings.maxWidth}x${this.plugin.settings.maxHeight}` : "No resize"}, Save to "${this.plugin.settings.attachmentFolder}/"`
+    });
+  }
+};
+
 // src/main.ts
-var WasmImageConverterPlugin = class extends import_obsidian2.Plugin {
+var WasmImageConverterPlugin = class extends import_obsidian3.Plugin {
   constructor() {
     super(...arguments);
     this.settings = { ...DEFAULT_SETTINGS };
   }
   async onload() {
-    const saved = await this.loadData();
-    if (saved) this.settings = { ...DEFAULT_SETTINGS, ...saved };
+    await this.loadSettings();
+    this.addSettingTab(new WasmImageConverterSettingTab(this.app, this));
     this.addCommand({
       id: "wasm-webp-open-converter",
       name: "WASM: Image \u2192 WebP Converter",
@@ -3381,15 +3429,21 @@ var WasmImageConverterPlugin = class extends import_obsidian2.Plugin {
               await this.app.vault.modify(active, content + "\n" + link);
             }
           } else {
-            new import_obsidian2.Notice("\u{1F4CB} WebP link: " + link);
+            new import_obsidian3.Notice("\u{1F4CB} WebP link: " + link);
           }
         } catch (e) {
           console.error(e);
-          new import_obsidian2.Notice("\u274C Image conversion failed");
+          new import_obsidian3.Notice("\u274C Image conversion failed");
         }
       }
     });
   }
   async onunload() {
+  }
+  async loadSettings() {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+  }
+  async saveSettings() {
+    await this.saveData(this.settings);
   }
 };

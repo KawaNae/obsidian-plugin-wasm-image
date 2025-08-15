@@ -1,14 +1,15 @@
 import { Notice, Plugin } from "obsidian";
 import { ConverterSettings, DEFAULT_SETTINGS } from "./settings";
 import { openImageConverterModal } from "./image-converter-modal";
+import { WasmImageConverterSettingTab } from "./settings-tab";
 
 export default class WasmImageConverterPlugin extends Plugin {
   settings: ConverterSettings = { ...DEFAULT_SETTINGS };
 
   async onload() {
-    // 設定ロード（必要なら settings タブは後で追加可）
-    const saved = await this.loadData();
-    if (saved) this.settings = { ...DEFAULT_SETTINGS, ...saved };
+    await this.loadSettings();
+
+    this.addSettingTab(new WasmImageConverterSettingTab(this.app, this));
 
     this.addCommand({
       id: "wasm-webp-open-converter",
@@ -41,6 +42,14 @@ export default class WasmImageConverterPlugin extends Plugin {
 
   async onunload() {
     // 何もしない
+  }
+
+  async loadSettings() {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+  }
+
+  async saveSettings() {
+    await this.saveData(this.settings);
   }
 }
 
