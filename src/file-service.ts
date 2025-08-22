@@ -1,5 +1,5 @@
 import { App } from "obsidian";
-import { ConverterSettings } from "./settings";
+import { ConverterSettings, ConverterType } from "./settings";
 import { convertImageToWebP, ImageProcessingOptions } from "./converters/webp-converter";
 
 export interface ConversionResult {
@@ -30,7 +30,8 @@ export async function saveImageAndInsert(
   enableResize: boolean,
   maxWidth: number,
   maxHeight: number,
-  enableGrayscale: boolean = false
+  enableGrayscale: boolean = false,
+  converterType: ConverterType = ConverterType.WASM_WEBP
 ): Promise<ConversionResult> {
   const folder = settings.attachmentFolder;
   const timestamp = (window as any).moment().format("YYYYMMDD[T]HHmmss");
@@ -43,17 +44,33 @@ export async function saveImageAndInsert(
     enableGrayscale
   });
   
-  const webpBlob = await convertImageToWebP(file, processingOptions);
-  const webpSizeKB = (webpBlob.size / 1024).toFixed(2);
-  const fileName = `IMG-${timestamp}-${webpSizeKB}.webp`;
+  // Convert image based on converter type
+  let convertedBlob: Blob;
+  let fileExtension: string;
+  
+  switch (converterType) {
+    case ConverterType.WASM_WEBP:
+    default:
+      convertedBlob = await convertImageToWebP(file, processingOptions);
+      fileExtension = "webp";
+      break;
+    // Future converters can be added here:
+    // case ConverterType.WASM_AVIF:
+    //   convertedBlob = await convertImageToAVIF(file, processingOptions);
+    //   fileExtension = "avif";
+    //   break;
+  }
+  
+  const sizeKB = (convertedBlob.size / 1024).toFixed(2);
+  const fileName = `IMG-${timestamp}-${sizeKB}.${fileExtension}`;
   const destPath = `${folder}/${fileName}`;
 
   // フォルダ無ければ作成
   if (!(await app.vault.adapter.exists(folder))) {
     await app.vault.adapter.mkdir(folder);
   }
-  const ab = await webpBlob.arrayBuffer();
+  const ab = await convertedBlob.arrayBuffer();
   await app.vault.adapter.writeBinary(destPath, ab);
 
-  return { path: destPath, originalSize: file.size, convertedSize: webpBlob.size };
+  return { path: destPath, originalSize: file.size, convertedSize: convertedBlob.size };
 }

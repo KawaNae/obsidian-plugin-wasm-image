@@ -1,5 +1,5 @@
 import { App, Notice } from "obsidian";
-import { ConverterSettings } from "./settings";
+import { ConverterSettings, PresetSettings, ConverterType, CONVERTER_OPTIONS } from "./settings";
 import { saveImageAndInsert, createProcessingOptions } from "./file-service";
 
 export async function openImageConverterModal(app: App, baseSettings: ConverterSettings): Promise<string | undefined> {
@@ -80,12 +80,82 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
     const rightColumn = document.createElement("div");
     rightColumn.style.flexShrink = "0";
 
-    // Quality
+    // Preset selector row
+    const presetRow = document.createElement("div");
+    presetRow.style.display = "flex";
+    presetRow.style.alignItems = "center";
+    presetRow.style.marginBottom = "10px";
+    presetRow.style.gap = "10px";
+
+    const presetLabel = document.createElement("label");
+    presetLabel.textContent = "Preset:";
+    presetLabel.style.fontSize = "14px";
+    presetLabel.style.minWidth = "80px";
+    presetLabel.style.flexShrink = "0";
+    presetLabel.style.color = "var(--text-muted)";
+
+    const presetSelect = document.createElement("select");
+    presetSelect.style.width = "120px";
+    presetSelect.style.fontSize = "14px";
+    presetSelect.style.height = "28px";
+
+    // Converter selector row
+    const converterRow = document.createElement("div");
+    converterRow.style.display = "flex";
+    converterRow.style.alignItems = "center";
+    converterRow.style.marginBottom = "10px";
+    converterRow.style.gap = "10px";
+
+    const converterLabel = document.createElement("label");
+    converterLabel.textContent = "Converter:";
+    converterLabel.style.fontSize = "14px";
+    converterLabel.style.minWidth = "80px";
+    converterLabel.style.flexShrink = "0";
+    converterLabel.style.color = "var(--text-muted)";
+
+    const converterSelect = document.createElement("select");
+    converterSelect.style.width = "120px";
+    converterSelect.style.fontSize = "14px";
+    converterSelect.style.height = "28px";
+
+    // Add converter options
+    CONVERTER_OPTIONS.forEach(option => {
+      const optionEl = document.createElement("option");
+      optionEl.value = option.value;
+      optionEl.textContent = option.label;
+      converterSelect.appendChild(optionEl);
+    });
+    converterSelect.value = settings.converterType;
+
+    // Add "Default" option
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "default";
+    defaultOption.textContent = "Default";
+    presetSelect.appendChild(defaultOption);
+
+    // Add preset options (skip Default preset as it's already added)
+    settings.presets.forEach((preset, index) => {
+      if (preset.name !== "Default") {
+        const option = document.createElement("option");
+        option.value = String(index);
+        option.textContent = preset.name;
+        presetSelect.appendChild(option);
+      }
+    });
+
+    // Quality row
+    const qualityRow = document.createElement("div");
+    qualityRow.style.display = "flex";
+    qualityRow.style.alignItems = "center";
+    qualityRow.style.marginBottom = "10px";
+    qualityRow.style.gap = "10px";
+
     const qualityLabel = document.createElement("label");
     qualityLabel.textContent = "Quality:";
-    qualityLabel.style.display = "block";
-    qualityLabel.style.marginBottom = "5px";
     qualityLabel.style.fontSize = "14px";
+    qualityLabel.style.minWidth = "80px";
+    qualityLabel.style.flexShrink = "0";
+    qualityLabel.style.color = "var(--text-muted)";
 
     const qualityInput = document.createElement("input");
     qualityInput.type = "number";
@@ -93,16 +163,17 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
     qualityInput.max = "1.0";
     qualityInput.step = "0.1";
     qualityInput.value = String(settings.quality);
-    qualityInput.style.width = "100px";
+    qualityInput.style.width = "120px";
     qualityInput.style.fontSize = "14px";
-    qualityInput.style.marginBottom = "15px";
+    qualityInput.style.height = "28px";
+    qualityInput.style.boxSizing = "border-box";
 
     // Resize checkbox
     const resizeRow = document.createElement("div");
     resizeRow.style.display = "flex";
     resizeRow.style.alignItems = "center";
-    resizeRow.style.marginBottom = "15px";
-    resizeRow.style.gap = "8px";
+    resizeRow.style.marginBottom = "10px";
+    resizeRow.style.gap = "10px";
 
     const resizeCheckbox = document.createElement("input");
     resizeCheckbox.type = "checkbox";
@@ -111,19 +182,29 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
 
     const resizeText = document.createElement("label");
     resizeText.htmlFor = "enableResize";
-    resizeText.textContent = "Resize";
+    resizeText.textContent = "Enable resize";
     resizeText.style.cursor = "pointer";
     resizeText.style.fontSize = "14px";
+    resizeText.style.minWidth = "80px";
+    resizeText.style.flexShrink = "0";
+    resizeText.style.color = "var(--text-muted)";
 
-    resizeRow.appendChild(resizeCheckbox);
+    const resizeContainer = document.createElement("div");
+    resizeContainer.style.width = "120px";
+    resizeContainer.style.height = "28px";
+    resizeContainer.style.display = "flex";
+    resizeContainer.style.alignItems = "center";
+
+    resizeContainer.appendChild(resizeCheckbox);
     resizeRow.appendChild(resizeText);
+    resizeRow.appendChild(resizeContainer);
 
     // Grayscale checkbox
     const grayscaleRow = document.createElement("div");
     grayscaleRow.style.display = "flex";
     grayscaleRow.style.alignItems = "center";
-    grayscaleRow.style.marginBottom = "15px";
-    grayscaleRow.style.gap = "8px";
+    grayscaleRow.style.marginBottom = "10px";
+    grayscaleRow.style.gap = "10px";
 
     const grayscaleCheckbox = document.createElement("input");
     grayscaleCheckbox.type = "checkbox";
@@ -135,42 +216,68 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
     grayscaleText.textContent = "Grayscale";
     grayscaleText.style.cursor = "pointer";
     grayscaleText.style.fontSize = "14px";
+    grayscaleText.style.minWidth = "80px";
+    grayscaleText.style.flexShrink = "0";
+    grayscaleText.style.color = "var(--text-muted)";
 
-    grayscaleRow.appendChild(grayscaleCheckbox);
+    const grayscaleContainer = document.createElement("div");
+    grayscaleContainer.style.width = "120px";
+    grayscaleContainer.style.height = "28px";
+    grayscaleContainer.style.display = "flex";
+    grayscaleContainer.style.alignItems = "center";
+
+    grayscaleContainer.appendChild(grayscaleCheckbox);
     grayscaleRow.appendChild(grayscaleText);
+    grayscaleRow.appendChild(grayscaleContainer);
 
-    // Max Width
+    // Max Width row
+    const maxWidthRow = document.createElement("div");
+    maxWidthRow.style.display = "flex";
+    maxWidthRow.style.alignItems = "center";
+    maxWidthRow.style.marginBottom = "10px";
+    maxWidthRow.style.gap = "10px";
+
     const maxWidthLabel = document.createElement("label");
     maxWidthLabel.textContent = "Max Width:";
-    maxWidthLabel.style.display = "block";
-    maxWidthLabel.style.marginBottom = "5px";
     maxWidthLabel.style.fontSize = "14px";
+    maxWidthLabel.style.minWidth = "80px";
+    maxWidthLabel.style.flexShrink = "0";
+    maxWidthLabel.style.color = "var(--text-muted)";
 
     const maxW = document.createElement("input");
     maxW.type = "number";
     maxW.min = "100";
     maxW.max = "5000";
     maxW.value = String(settings.maxWidth);
-    maxW.style.width = "100px";
+    maxW.style.width = "120px";
     maxW.style.fontSize = "14px";
-    maxW.style.marginBottom = "15px";
+    maxW.style.height = "28px";
+    maxW.style.boxSizing = "border-box";
     maxW.placeholder = "1920";
 
-    // Max Height
+    // Max Height row
+    const maxHeightRow = document.createElement("div");
+    maxHeightRow.style.display = "flex";
+    maxHeightRow.style.alignItems = "center";
+    maxHeightRow.style.marginBottom = "10px";
+    maxHeightRow.style.gap = "10px";
+
     const maxHeightLabel = document.createElement("label");
     maxHeightLabel.textContent = "Max Height:";
-    maxHeightLabel.style.display = "block";
-    maxHeightLabel.style.marginBottom = "5px";
     maxHeightLabel.style.fontSize = "14px";
+    maxHeightLabel.style.minWidth = "80px";
+    maxHeightLabel.style.flexShrink = "0";
+    maxHeightLabel.style.color = "var(--text-muted)";
 
     const maxH = document.createElement("input");
     maxH.type = "number";
     maxH.min = "100";
     maxH.max = "5000";
     maxH.value = String(settings.maxHeight);
-    maxH.style.width = "100px";
+    maxH.style.width = "120px";
     maxH.style.fontSize = "14px";
-    maxH.style.marginBottom = "15px";
+    maxH.style.height = "28px";
+    maxH.style.boxSizing = "border-box";
     maxH.placeholder = "1080";
 
     // Folder info
@@ -179,14 +286,25 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
     folderInfo.style.color = "var(--text-muted)";
     folderInfo.textContent = `Save to: ${settings.attachmentFolder}/`;
 
-    rightColumn.appendChild(qualityLabel);
-    rightColumn.appendChild(qualityInput);
+    // Add elements to their rows
+    presetRow.appendChild(presetLabel);
+    presetRow.appendChild(presetSelect);
+    converterRow.appendChild(converterLabel);
+    converterRow.appendChild(converterSelect);
+    qualityRow.appendChild(qualityLabel);
+    qualityRow.appendChild(qualityInput);
+    maxWidthRow.appendChild(maxWidthLabel);
+    maxWidthRow.appendChild(maxW);
+    maxHeightRow.appendChild(maxHeightLabel);
+    maxHeightRow.appendChild(maxH);
+
+    rightColumn.appendChild(presetRow);
+    rightColumn.appendChild(converterRow);
+    rightColumn.appendChild(qualityRow);
     rightColumn.appendChild(grayscaleRow);
     rightColumn.appendChild(resizeRow);
-    rightColumn.appendChild(maxWidthLabel);
-    rightColumn.appendChild(maxW);
-    rightColumn.appendChild(maxHeightLabel);
-    rightColumn.appendChild(maxH);
+    rightColumn.appendChild(maxWidthRow);
+    rightColumn.appendChild(maxHeightRow);
     rightColumn.appendChild(folderInfo);
 
     mainContent.appendChild(leftColumn);
@@ -230,6 +348,18 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
       if (fileInput.parentNode) document.body.removeChild(fileInput);
       modal.remove();
       resolve(val);
+    }
+
+    function applyPreset(preset: PresetSettings) {
+      converterSelect.value = preset.converterType;
+      settings.converterType = preset.converterType;
+      qualityInput.value = String(preset.quality);
+      maxW.value = String(preset.maxWidth);
+      maxH.value = String(preset.maxHeight);
+      resizeCheckbox.checked = preset.enableResize;
+      grayscaleCheckbox.checked = preset.enableGrayscale;
+      settings.attachmentFolder = preset.attachmentFolder;
+      folderInfo.textContent = `Save to: ${preset.attachmentFolder}/`;
     }
 
     async function handleFileSelect(file: File) {
@@ -285,6 +415,37 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
       if (files && files.length > 0) handleFileSelect(files[0]);
     });
 
+    // ===== Preset Selection =====
+    presetSelect.addEventListener("change", () => {
+      const selectedValue = presetSelect.value;
+      if (selectedValue === "default") {
+        const defaultPreset = settings.presets.find(p => p.name === "Default");
+        if (defaultPreset) {
+          applyPreset(defaultPreset);
+        }
+      } else {
+        const presetIndex = parseInt(selectedValue);
+        const selectedPreset = settings.presets[presetIndex];
+        if (selectedPreset) {
+          applyPreset(selectedPreset);
+        }
+      }
+    });
+
+    // ===== Converter change handler =====
+    converterSelect.addEventListener("change", () => {
+      settings.converterType = converterSelect.value as ConverterType;
+      presetSelect.value = "default";
+    });
+
+    // ===== Input change handlers to switch to "Default" =====
+    const inputElements = [qualityInput, maxW, maxH, resizeCheckbox, grayscaleCheckbox];
+    inputElements.forEach(input => {
+      input.addEventListener("change", () => {
+        presetSelect.value = "default";
+      });
+    });
+
     // ===== Buttons =====
     clipboardBtn.addEventListener("click", async () => {
       try {
@@ -328,7 +489,8 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
           doResize,
           currentMaxW,
           currentMaxH,
-          doGrayscale
+          doGrayscale,
+          settings.converterType
         );
         const fileName = result.path.split("/").pop()!;
         const markdownLink = `![[${fileName}]]`;

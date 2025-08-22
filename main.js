@@ -2969,16 +2969,36 @@ module.exports = __toCommonJS(main_exports);
 var import_obsidian3 = require("obsidian");
 
 // src/settings.ts
-var DEFAULT_SETTINGS = {
+var CONVERTER_OPTIONS = [
+  { value: "wasm-webp" /* WASM_WEBP */, label: "WASM WebP", description: "WebP conversion using WebAssembly" }
+  // Future options:
+  // { value: ConverterType.WASM_AVIF, label: "WASM AVIF", description: "AVIF conversion using WebAssembly" },
+];
+var DEFAULT_PRESET = {
+  name: "Default",
+  converterType: "wasm-webp" /* WASM_WEBP */,
   quality: 0.8,
   maxWidth: 1920,
   maxHeight: 1080,
   enableResize: true,
-  attachmentFolder: "Attachments",
+  enableGrayscale: false,
+  attachmentFolder: "Attachments"
+};
+var DEFAULT_PRESETS = [
+  DEFAULT_PRESET
+];
+var DEFAULT_SETTINGS = {
+  converterType: DEFAULT_PRESET.converterType,
+  quality: DEFAULT_PRESET.quality,
+  maxWidth: DEFAULT_PRESET.maxWidth,
+  maxHeight: DEFAULT_PRESET.maxHeight,
+  enableResize: DEFAULT_PRESET.enableResize,
+  attachmentFolder: DEFAULT_PRESET.attachmentFolder,
   autoReadClipboard: false,
   // デフォルトはオフ（iPadでの問題回避）
-  enableGrayscale: false
-  // デフォルトはオフ
+  enableGrayscale: DEFAULT_PRESET.enableGrayscale,
+  presets: [...DEFAULT_PRESETS]
+  // デフォルトプリセット
 };
 
 // src/image-converter-modal.ts
@@ -3138,7 +3158,7 @@ function createProcessingOptions(settings, overrides) {
     ...overrides
   };
 }
-async function saveImageAndInsert(app, file, settings, quality, enableResize, maxWidth, maxHeight, enableGrayscale = false) {
+async function saveImageAndInsert(app, file, settings, quality, enableResize, maxWidth, maxHeight, enableGrayscale = false, converterType = "wasm-webp" /* WASM_WEBP */) {
   const folder = settings.attachmentFolder;
   const timestamp = window.moment().format("YYYYMMDD[T]HHmmss");
   const processingOptions = createProcessingOptions(settings, {
@@ -3148,16 +3168,24 @@ async function saveImageAndInsert(app, file, settings, quality, enableResize, ma
     maxHeight,
     enableGrayscale
   });
-  const webpBlob = await convertImageToWebP(file, processingOptions);
-  const webpSizeKB = (webpBlob.size / 1024).toFixed(2);
-  const fileName = `IMG-${timestamp}-${webpSizeKB}.webp`;
+  let convertedBlob;
+  let fileExtension;
+  switch (converterType) {
+    case "wasm-webp" /* WASM_WEBP */:
+    default:
+      convertedBlob = await convertImageToWebP(file, processingOptions);
+      fileExtension = "webp";
+      break;
+  }
+  const sizeKB = (convertedBlob.size / 1024).toFixed(2);
+  const fileName = `IMG-${timestamp}-${sizeKB}.${fileExtension}`;
   const destPath = `${folder}/${fileName}`;
   if (!await app.vault.adapter.exists(folder)) {
     await app.vault.adapter.mkdir(folder);
   }
-  const ab = await webpBlob.arrayBuffer();
+  const ab = await convertedBlob.arrayBuffer();
   await app.vault.adapter.writeBinary(destPath, ab);
-  return { path: destPath, originalSize: file.size, convertedSize: webpBlob.size };
+  return { path: destPath, originalSize: file.size, convertedSize: convertedBlob.size };
 }
 
 // src/image-converter-modal.ts
@@ -3224,41 +3252,106 @@ async function openImageConverterModal(app, baseSettings) {
     leftColumn.appendChild(clipboardBtn);
     const rightColumn = document.createElement("div");
     rightColumn.style.flexShrink = "0";
+    const presetRow = document.createElement("div");
+    presetRow.style.display = "flex";
+    presetRow.style.alignItems = "center";
+    presetRow.style.marginBottom = "10px";
+    presetRow.style.gap = "10px";
+    const presetLabel = document.createElement("label");
+    presetLabel.textContent = "Preset:";
+    presetLabel.style.fontSize = "14px";
+    presetLabel.style.minWidth = "80px";
+    presetLabel.style.flexShrink = "0";
+    presetLabel.style.color = "var(--text-muted)";
+    const presetSelect = document.createElement("select");
+    presetSelect.style.width = "120px";
+    presetSelect.style.fontSize = "14px";
+    presetSelect.style.height = "28px";
+    const converterRow = document.createElement("div");
+    converterRow.style.display = "flex";
+    converterRow.style.alignItems = "center";
+    converterRow.style.marginBottom = "10px";
+    converterRow.style.gap = "10px";
+    const converterLabel = document.createElement("label");
+    converterLabel.textContent = "Converter:";
+    converterLabel.style.fontSize = "14px";
+    converterLabel.style.minWidth = "80px";
+    converterLabel.style.flexShrink = "0";
+    converterLabel.style.color = "var(--text-muted)";
+    const converterSelect = document.createElement("select");
+    converterSelect.style.width = "120px";
+    converterSelect.style.fontSize = "14px";
+    converterSelect.style.height = "28px";
+    CONVERTER_OPTIONS.forEach((option) => {
+      const optionEl = document.createElement("option");
+      optionEl.value = option.value;
+      optionEl.textContent = option.label;
+      converterSelect.appendChild(optionEl);
+    });
+    converterSelect.value = settings.converterType;
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "default";
+    defaultOption.textContent = "Default";
+    presetSelect.appendChild(defaultOption);
+    settings.presets.forEach((preset, index) => {
+      if (preset.name !== "Default") {
+        const option = document.createElement("option");
+        option.value = String(index);
+        option.textContent = preset.name;
+        presetSelect.appendChild(option);
+      }
+    });
+    const qualityRow = document.createElement("div");
+    qualityRow.style.display = "flex";
+    qualityRow.style.alignItems = "center";
+    qualityRow.style.marginBottom = "10px";
+    qualityRow.style.gap = "10px";
     const qualityLabel = document.createElement("label");
     qualityLabel.textContent = "Quality:";
-    qualityLabel.style.display = "block";
-    qualityLabel.style.marginBottom = "5px";
     qualityLabel.style.fontSize = "14px";
+    qualityLabel.style.minWidth = "80px";
+    qualityLabel.style.flexShrink = "0";
+    qualityLabel.style.color = "var(--text-muted)";
     const qualityInput = document.createElement("input");
     qualityInput.type = "number";
     qualityInput.min = "0.1";
     qualityInput.max = "1.0";
     qualityInput.step = "0.1";
     qualityInput.value = String(settings.quality);
-    qualityInput.style.width = "100px";
+    qualityInput.style.width = "120px";
     qualityInput.style.fontSize = "14px";
-    qualityInput.style.marginBottom = "15px";
+    qualityInput.style.height = "28px";
+    qualityInput.style.boxSizing = "border-box";
     const resizeRow = document.createElement("div");
     resizeRow.style.display = "flex";
     resizeRow.style.alignItems = "center";
-    resizeRow.style.marginBottom = "15px";
-    resizeRow.style.gap = "8px";
+    resizeRow.style.marginBottom = "10px";
+    resizeRow.style.gap = "10px";
     const resizeCheckbox = document.createElement("input");
     resizeCheckbox.type = "checkbox";
     resizeCheckbox.checked = settings.enableResize;
     resizeCheckbox.id = "enableResize";
     const resizeText = document.createElement("label");
     resizeText.htmlFor = "enableResize";
-    resizeText.textContent = "Resize";
+    resizeText.textContent = "Enable resize";
     resizeText.style.cursor = "pointer";
     resizeText.style.fontSize = "14px";
-    resizeRow.appendChild(resizeCheckbox);
+    resizeText.style.minWidth = "80px";
+    resizeText.style.flexShrink = "0";
+    resizeText.style.color = "var(--text-muted)";
+    const resizeContainer = document.createElement("div");
+    resizeContainer.style.width = "120px";
+    resizeContainer.style.height = "28px";
+    resizeContainer.style.display = "flex";
+    resizeContainer.style.alignItems = "center";
+    resizeContainer.appendChild(resizeCheckbox);
     resizeRow.appendChild(resizeText);
+    resizeRow.appendChild(resizeContainer);
     const grayscaleRow = document.createElement("div");
     grayscaleRow.style.display = "flex";
     grayscaleRow.style.alignItems = "center";
-    grayscaleRow.style.marginBottom = "15px";
-    grayscaleRow.style.gap = "8px";
+    grayscaleRow.style.marginBottom = "10px";
+    grayscaleRow.style.gap = "10px";
     const grayscaleCheckbox = document.createElement("input");
     grayscaleCheckbox.type = "checkbox";
     grayscaleCheckbox.checked = settings.enableGrayscale;
@@ -3268,48 +3361,80 @@ async function openImageConverterModal(app, baseSettings) {
     grayscaleText.textContent = "Grayscale";
     grayscaleText.style.cursor = "pointer";
     grayscaleText.style.fontSize = "14px";
-    grayscaleRow.appendChild(grayscaleCheckbox);
+    grayscaleText.style.minWidth = "80px";
+    grayscaleText.style.flexShrink = "0";
+    grayscaleText.style.color = "var(--text-muted)";
+    const grayscaleContainer = document.createElement("div");
+    grayscaleContainer.style.width = "120px";
+    grayscaleContainer.style.height = "28px";
+    grayscaleContainer.style.display = "flex";
+    grayscaleContainer.style.alignItems = "center";
+    grayscaleContainer.appendChild(grayscaleCheckbox);
     grayscaleRow.appendChild(grayscaleText);
+    grayscaleRow.appendChild(grayscaleContainer);
+    const maxWidthRow = document.createElement("div");
+    maxWidthRow.style.display = "flex";
+    maxWidthRow.style.alignItems = "center";
+    maxWidthRow.style.marginBottom = "10px";
+    maxWidthRow.style.gap = "10px";
     const maxWidthLabel = document.createElement("label");
     maxWidthLabel.textContent = "Max Width:";
-    maxWidthLabel.style.display = "block";
-    maxWidthLabel.style.marginBottom = "5px";
     maxWidthLabel.style.fontSize = "14px";
+    maxWidthLabel.style.minWidth = "80px";
+    maxWidthLabel.style.flexShrink = "0";
+    maxWidthLabel.style.color = "var(--text-muted)";
     const maxW = document.createElement("input");
     maxW.type = "number";
     maxW.min = "100";
     maxW.max = "5000";
     maxW.value = String(settings.maxWidth);
-    maxW.style.width = "100px";
+    maxW.style.width = "120px";
     maxW.style.fontSize = "14px";
-    maxW.style.marginBottom = "15px";
+    maxW.style.height = "28px";
+    maxW.style.boxSizing = "border-box";
     maxW.placeholder = "1920";
+    const maxHeightRow = document.createElement("div");
+    maxHeightRow.style.display = "flex";
+    maxHeightRow.style.alignItems = "center";
+    maxHeightRow.style.marginBottom = "10px";
+    maxHeightRow.style.gap = "10px";
     const maxHeightLabel = document.createElement("label");
     maxHeightLabel.textContent = "Max Height:";
-    maxHeightLabel.style.display = "block";
-    maxHeightLabel.style.marginBottom = "5px";
     maxHeightLabel.style.fontSize = "14px";
+    maxHeightLabel.style.minWidth = "80px";
+    maxHeightLabel.style.flexShrink = "0";
+    maxHeightLabel.style.color = "var(--text-muted)";
     const maxH = document.createElement("input");
     maxH.type = "number";
     maxH.min = "100";
     maxH.max = "5000";
     maxH.value = String(settings.maxHeight);
-    maxH.style.width = "100px";
+    maxH.style.width = "120px";
     maxH.style.fontSize = "14px";
-    maxH.style.marginBottom = "15px";
+    maxH.style.height = "28px";
+    maxH.style.boxSizing = "border-box";
     maxH.placeholder = "1080";
     const folderInfo = document.createElement("div");
     folderInfo.style.fontSize = "12px";
     folderInfo.style.color = "var(--text-muted)";
     folderInfo.textContent = `Save to: ${settings.attachmentFolder}/`;
-    rightColumn.appendChild(qualityLabel);
-    rightColumn.appendChild(qualityInput);
+    presetRow.appendChild(presetLabel);
+    presetRow.appendChild(presetSelect);
+    converterRow.appendChild(converterLabel);
+    converterRow.appendChild(converterSelect);
+    qualityRow.appendChild(qualityLabel);
+    qualityRow.appendChild(qualityInput);
+    maxWidthRow.appendChild(maxWidthLabel);
+    maxWidthRow.appendChild(maxW);
+    maxHeightRow.appendChild(maxHeightLabel);
+    maxHeightRow.appendChild(maxH);
+    rightColumn.appendChild(presetRow);
+    rightColumn.appendChild(converterRow);
+    rightColumn.appendChild(qualityRow);
     rightColumn.appendChild(grayscaleRow);
     rightColumn.appendChild(resizeRow);
-    rightColumn.appendChild(maxWidthLabel);
-    rightColumn.appendChild(maxW);
-    rightColumn.appendChild(maxHeightLabel);
-    rightColumn.appendChild(maxH);
+    rightColumn.appendChild(maxWidthRow);
+    rightColumn.appendChild(maxHeightRow);
     rightColumn.appendChild(folderInfo);
     mainContent.appendChild(leftColumn);
     mainContent.appendChild(rightColumn);
@@ -3341,6 +3466,17 @@ async function openImageConverterModal(app, baseSettings) {
       if (fileInput.parentNode) document.body.removeChild(fileInput);
       modal.remove();
       resolve(val);
+    }
+    function applyPreset(preset) {
+      converterSelect.value = preset.converterType;
+      settings.converterType = preset.converterType;
+      qualityInput.value = String(preset.quality);
+      maxW.value = String(preset.maxWidth);
+      maxH.value = String(preset.maxHeight);
+      resizeCheckbox.checked = preset.enableResize;
+      grayscaleCheckbox.checked = preset.enableGrayscale;
+      settings.attachmentFolder = preset.attachmentFolder;
+      folderInfo.textContent = `Save to: ${preset.attachmentFolder}/`;
     }
     async function handleFileSelect(file) {
       if (!file || !file.type.startsWith("image/")) {
@@ -3387,6 +3523,31 @@ async function openImageConverterModal(app, baseSettings) {
       const files = e.dataTransfer?.files;
       if (files && files.length > 0) handleFileSelect(files[0]);
     });
+    presetSelect.addEventListener("change", () => {
+      const selectedValue = presetSelect.value;
+      if (selectedValue === "default") {
+        const defaultPreset = settings.presets.find((p) => p.name === "Default");
+        if (defaultPreset) {
+          applyPreset(defaultPreset);
+        }
+      } else {
+        const presetIndex = parseInt(selectedValue);
+        const selectedPreset = settings.presets[presetIndex];
+        if (selectedPreset) {
+          applyPreset(selectedPreset);
+        }
+      }
+    });
+    converterSelect.addEventListener("change", () => {
+      settings.converterType = converterSelect.value;
+      presetSelect.value = "default";
+    });
+    const inputElements = [qualityInput, maxW, maxH, resizeCheckbox, grayscaleCheckbox];
+    inputElements.forEach((input) => {
+      input.addEventListener("change", () => {
+        presetSelect.value = "default";
+      });
+    });
     clipboardBtn.addEventListener("click", async () => {
       try {
         const items = await navigator.clipboard.read();
@@ -3425,7 +3586,8 @@ async function openImageConverterModal(app, baseSettings) {
           doResize,
           currentMaxW,
           currentMaxH,
-          doGrayscale
+          doGrayscale,
+          settings.converterType
         );
         const fileName = result.path.split("/").pop();
         const markdownLink = `![[${fileName}]]`;
@@ -3475,48 +3637,209 @@ var WasmImageConverterSettingTab = class extends import_obsidian2.PluginSettingT
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: "WASM Image Converter Settings" });
-    new import_obsidian2.Setting(containerEl).setName("Quality").setDesc("WebP compression quality (0.1 - 1.0). Higher values mean better quality but larger files.").addText((text) => text.setPlaceholder("0.8").setValue(String(this.plugin.settings.quality)).onChange(async (value) => {
-      const numValue = parseFloat(value);
-      if (!isNaN(numValue) && numValue >= 0.1 && numValue <= 1) {
-        this.plugin.settings.quality = numValue;
-        await this.plugin.saveSettings();
-      }
-    }));
-    new import_obsidian2.Setting(containerEl).setName("Enable resize").setDesc("Automatically resize images that exceed the maximum dimensions").addToggle((toggle) => toggle.setValue(this.plugin.settings.enableResize).onChange(async (value) => {
-      this.plugin.settings.enableResize = value;
-      await this.plugin.saveSettings();
-    }));
-    new import_obsidian2.Setting(containerEl).setName("Maximum width").setDesc("Maximum width in pixels for resized images").addText((text) => text.setPlaceholder("1920").setValue(String(this.plugin.settings.maxWidth)).onChange(async (value) => {
-      const numValue = parseInt(value);
-      if (!isNaN(numValue) && numValue > 0) {
-        this.plugin.settings.maxWidth = numValue;
-        await this.plugin.saveSettings();
-      }
-    }));
-    new import_obsidian2.Setting(containerEl).setName("Maximum height").setDesc("Maximum height in pixels for resized images").addText((text) => text.setPlaceholder("1080").setValue(String(this.plugin.settings.maxHeight)).onChange(async (value) => {
-      const numValue = parseInt(value);
-      if (!isNaN(numValue) && numValue > 0) {
-        this.plugin.settings.maxHeight = numValue;
-        await this.plugin.saveSettings();
-      }
-    }));
-    new import_obsidian2.Setting(containerEl).setName("Attachment folder").setDesc("Folder where converted WebP images will be saved").addText((text) => text.setPlaceholder("Attachments").setValue(this.plugin.settings.attachmentFolder).onChange(async (value) => {
-      this.plugin.settings.attachmentFolder = value || "Attachments";
-      await this.plugin.saveSettings();
-    }));
+    containerEl.createEl("h3", { text: "General Settings" });
+    const generalDesc = containerEl.createEl("div", {
+      cls: "setting-item-description",
+      text: "These settings apply globally and are not saved in presets."
+    });
+    generalDesc.style.marginBottom = "15px";
     new import_obsidian2.Setting(containerEl).setName("Auto-read clipboard on startup").setDesc("Automatically check clipboard for images when opening the converter (may show permission dialog on mobile devices)").addToggle((toggle) => toggle.setValue(this.plugin.settings.autoReadClipboard).onChange(async (value) => {
       this.plugin.settings.autoReadClipboard = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian2.Setting(containerEl).setName("Convert to grayscale").setDesc("Convert images to grayscale before WebP conversion for better compression of documents and diagrams").addToggle((toggle) => toggle.setValue(this.plugin.settings.enableGrayscale).onChange(async (value) => {
-      this.plugin.settings.enableGrayscale = value;
-      await this.plugin.saveSettings();
-    }));
-    containerEl.createEl("h3", { text: "Preview" });
-    const previewEl = containerEl.createEl("div", {
+    containerEl.createEl("h3", { text: "Conversion Presets" });
+    const presetsDesc = containerEl.createEl("div", {
       cls: "setting-item-description",
-      text: `Current settings: Quality ${(this.plugin.settings.quality * 100).toFixed(0)}%, ${this.plugin.settings.enableResize ? `Max size ${this.plugin.settings.maxWidth}x${this.plugin.settings.maxHeight}` : "No resize"}, ${this.plugin.settings.enableGrayscale ? "Grayscale enabled" : "Color"}, Save to "${this.plugin.settings.attachmentFolder}/"`
+      text: "Manage conversion presets that include: Attachment folder, Quality, Grayscale, Resize settings, and Maximum dimensions."
     });
+    presetsDesc.style.marginBottom = "15px";
+    this.displayPresets();
+    containerEl.createEl("h3", { text: "Dangerous Settings" });
+    const dangerDesc = containerEl.createEl("div", {
+      cls: "setting-item-description",
+      text: "These actions cannot be undone. Use with caution."
+    });
+    dangerDesc.style.marginBottom = "15px";
+    dangerDesc.style.color = "var(--text-error)";
+    new import_obsidian2.Setting(containerEl).setName("Reset All Presets").setDesc("Reset all presets to factory defaults. This will remove all custom presets and restore only the Default preset.").addButton((button) => button.setButtonText("Reset to Defaults").setWarning().onClick(async () => {
+      const confirmed = await this.showResetConfirmation();
+      if (confirmed) {
+        this.plugin.settings.presets = [DEFAULT_PRESET];
+        await this.plugin.saveSettings();
+        this.display();
+      }
+    }));
+  }
+  displayPresets() {
+    const { containerEl } = this;
+    const presetsContainer = containerEl.createDiv("presets-container");
+    new import_obsidian2.Setting(presetsContainer).setName("Manage Presets").setDesc("Create and edit conversion presets").addButton((button) => button.setButtonText("Make Preset").onClick(() => {
+      new PresetEditModal(this.app, this.plugin, null, () => this.display()).open();
+    }));
+    if (this.plugin.settings.presets.length === 0) {
+      presetsContainer.createEl("p", {
+        cls: "setting-item-description",
+        text: "No presets found. Click 'Make Preset' to create one."
+      });
+      return;
+    }
+    this.plugin.settings.presets.forEach((preset, index) => {
+      const isDefault = preset.name === "Default";
+      const converterLabel = CONVERTER_OPTIONS.find((opt) => opt.value === preset.converterType)?.label || preset.converterType;
+      new import_obsidian2.Setting(presetsContainer).setName(preset.name).setDesc(`Converter: ${converterLabel}, Quality: ${(preset.quality * 100).toFixed(0)}%, ${preset.enableResize ? `Max: ${preset.maxWidth}x${preset.maxHeight}` : "No resize"}, ${preset.enableGrayscale ? "Grayscale" : "Color"}, Folder: "${preset.attachmentFolder}"`).addButton((button) => button.setButtonText("Edit").onClick(() => {
+        new PresetEditModal(this.app, this.plugin, preset, () => this.display()).open();
+      })).addButton((button) => button.setButtonText("Delete").setDisabled(isDefault).onClick(async () => {
+        this.plugin.settings.presets.splice(index, 1);
+        await this.plugin.saveSettings();
+        this.display();
+      }));
+    });
+  }
+  async showResetConfirmation() {
+    return new Promise((resolve) => {
+      const modal = new ConfirmationModal(this.app, {
+        title: "Reset All Presets",
+        message: "Are you sure you want to reset all presets to factory defaults?\n\nThis will:\n\u2022 Remove all custom presets\n\u2022 Keep only the Default preset\n\u2022 Cannot be undone",
+        confirmText: "Reset to Defaults",
+        cancelText: "Cancel",
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false)
+      });
+      modal.open();
+    });
+  }
+};
+var ConfirmationModal = class extends import_obsidian2.Modal {
+  constructor(app, options) {
+    super(app);
+    this.title = options.title;
+    this.message = options.message;
+    this.confirmText = options.confirmText;
+    this.cancelText = options.cancelText;
+    this.onConfirm = options.onConfirm;
+    this.onCancel = options.onCancel;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl("h2", { text: this.title });
+    const messageEl = contentEl.createEl("p", { cls: "setting-item-description" });
+    messageEl.style.whiteSpace = "pre-line";
+    messageEl.style.marginBottom = "20px";
+    messageEl.setText(this.message);
+    const buttonContainer = contentEl.createDiv();
+    buttonContainer.style.display = "flex";
+    buttonContainer.style.gap = "10px";
+    buttonContainer.style.justifyContent = "flex-end";
+    const cancelBtn = buttonContainer.createEl("button", { text: this.cancelText });
+    cancelBtn.onclick = () => {
+      this.close();
+      this.onCancel();
+    };
+    const confirmBtn = buttonContainer.createEl("button", { text: this.confirmText });
+    confirmBtn.classList.add("mod-warning");
+    confirmBtn.onclick = () => {
+      this.close();
+      this.onConfirm();
+    };
+  }
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+  }
+};
+var PresetEditModal = class extends import_obsidian2.Modal {
+  constructor(app, plugin, preset, onSave) {
+    super(app);
+    this.plugin = plugin;
+    this.preset = preset;
+    this.onSave = onSave;
+    this.isEditing = preset !== null;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl("h2", { text: this.isEditing ? "Edit Preset" : "Create Preset" });
+    let presetName = this.preset?.name || "";
+    let converterType = this.preset?.converterType || "wasm-webp" /* WASM_WEBP */;
+    let quality = this.preset?.quality || 0.8;
+    let maxWidth = this.preset?.maxWidth || 1920;
+    let maxHeight = this.preset?.maxHeight || 1080;
+    let enableResize = this.preset?.enableResize || true;
+    let enableGrayscale = this.preset?.enableGrayscale || false;
+    let attachmentFolder = this.preset?.attachmentFolder || "Attachments";
+    const isDefault = this.preset?.name === "Default";
+    new import_obsidian2.Setting(contentEl).setName("Preset Name").setDesc("Enter a name for this preset").addText((text) => text.setPlaceholder("My Preset").setValue(presetName).setDisabled(isDefault).onChange((value) => {
+      presetName = value;
+    }));
+    new import_obsidian2.Setting(contentEl).setName("Converter").setDesc("Select the image converter to use").addDropdown((dropdown) => {
+      CONVERTER_OPTIONS.forEach((option) => {
+        dropdown.addOption(option.value, option.label);
+      });
+      dropdown.setValue(converterType);
+      dropdown.onChange((value) => {
+        converterType = value;
+      });
+    });
+    new import_obsidian2.Setting(contentEl).setName("Attachment folder").setDesc("Folder where converted WebP images will be saved").addText((text) => text.setPlaceholder("Attachments").setValue(attachmentFolder).onChange((value) => {
+      attachmentFolder = value || "Attachments";
+    }));
+    new import_obsidian2.Setting(contentEl).setName("Quality").setDesc("WebP compression quality (0.1 - 1.0). Higher values mean better quality but larger files.").addText((text) => text.setPlaceholder("0.8").setValue(String(quality)).onChange((value) => {
+      const numValue = parseFloat(value);
+      if (!isNaN(numValue) && numValue >= 0.1 && numValue <= 1) {
+        quality = numValue;
+      }
+    }));
+    new import_obsidian2.Setting(contentEl).setName("Convert to grayscale").setDesc("Convert images to grayscale before WebP conversion").addToggle((toggle) => toggle.setValue(enableGrayscale).onChange((value) => {
+      enableGrayscale = value;
+    }));
+    new import_obsidian2.Setting(contentEl).setName("Enable resize").setDesc("Automatically resize images that exceed the maximum dimensions").addToggle((toggle) => toggle.setValue(enableResize).onChange((value) => {
+      enableResize = value;
+    }));
+    new import_obsidian2.Setting(contentEl).setName("Maximum width").setDesc("Maximum width in pixels for resized images").addText((text) => text.setPlaceholder("1920").setValue(String(maxWidth)).onChange((value) => {
+      const numValue = parseInt(value);
+      if (!isNaN(numValue) && numValue > 0) {
+        maxWidth = numValue;
+      }
+    }));
+    new import_obsidian2.Setting(contentEl).setName("Maximum height").setDesc("Maximum height in pixels for resized images").addText((text) => text.setPlaceholder("1080").setValue(String(maxHeight)).onChange((value) => {
+      const numValue = parseInt(value);
+      if (!isNaN(numValue) && numValue > 0) {
+        maxHeight = numValue;
+      }
+    }));
+    new import_obsidian2.Setting(contentEl).addButton((button) => button.setButtonText("Cancel").onClick(() => {
+      this.close();
+    })).addButton((button) => button.setButtonText(this.isEditing ? "Save Changes" : "Create Preset").setCta().onClick(async () => {
+      if (!presetName.trim()) {
+        return;
+      }
+      const updatedPreset = {
+        name: presetName.trim(),
+        converterType,
+        quality,
+        maxWidth,
+        maxHeight,
+        enableResize,
+        enableGrayscale,
+        attachmentFolder
+      };
+      if (this.isEditing && this.preset) {
+        const index = this.plugin.settings.presets.findIndex((p) => p === this.preset);
+        if (index !== -1) {
+          this.plugin.settings.presets[index] = updatedPreset;
+        }
+      } else {
+        this.plugin.settings.presets.push(updatedPreset);
+      }
+      await this.plugin.saveSettings();
+      this.close();
+      this.onSave();
+    }));
+  }
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
   }
 };
 
