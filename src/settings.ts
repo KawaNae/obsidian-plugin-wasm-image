@@ -5,6 +5,7 @@ export interface ConverterSettings {
   enableResize: boolean;
   attachmentFolder: string; // 保存先
   autoReadClipboard: boolean; // 起動時クリップボード自動読み取り
+  enableGrayscale: boolean; // グレースケール変換
 }
 
 export const DEFAULT_SETTINGS: ConverterSettings = {
@@ -14,4 +15,5 @@ export const DEFAULT_SETTINGS: ConverterSettings = {
   enableResize: true,
   attachmentFolder: "Attachments",
   autoReadClipboard: false, // デフォルトはオフ（iPadでの問題回避）
+  enableGrayscale: false, // デフォルトはオフ
 };

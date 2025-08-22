@@ -2975,8 +2975,10 @@ var DEFAULT_SETTINGS = {
   maxHeight: 1080,
   enableResize: true,
   attachmentFolder: "Attachments",
-  autoReadClipboard: false
+  autoReadClipboard: false,
   // デフォルトはオフ（iPadでの問題回避）
+  enableGrayscale: false
+  // デフォルトはオフ
 };
 
 // src/image-converter-modal.ts
@@ -3057,8 +3059,33 @@ async function encode(data, options = {}) {
   return result.buffer;
 }
 
-// src/image-converter.ts
-async function convertImageToWebP(file, quality01, enableResize, maxWidth, maxHeight) {
+// src/converters/grayscale.ts
+function convertToGrayscale(rgba) {
+  const result = new Uint8Array(rgba.length);
+  for (let i = 0; i < rgba.length; i += 4) {
+    const gray = Math.round(
+      0.299 * rgba[i] + // R
+      0.587 * rgba[i + 1] + // G
+      0.114 * rgba[i + 2]
+      // B
+    );
+    result[i] = gray;
+    result[i + 1] = gray;
+    result[i + 2] = gray;
+    result[i + 3] = rgba[i + 3];
+  }
+  return result;
+}
+
+// src/converters/webp-converter.ts
+async function convertImageToWebP(file, optionsOrQuality, enableResize, maxWidth, maxHeight, enableGrayscale = false) {
+  const options = typeof optionsOrQuality === "object" ? optionsOrQuality : {
+    quality: optionsOrQuality,
+    enableResize,
+    maxWidth,
+    maxHeight,
+    enableGrayscale
+  };
   const bmp = await (async () => {
     try {
       if (typeof createImageBitmap === "function") {
@@ -3076,13 +3103,13 @@ async function convertImageToWebP(file, quality01, enableResize, maxWidth, maxHe
   })();
   let width = bmp.width;
   let height = bmp.height;
-  if (enableResize && (width > maxWidth || height > maxHeight)) {
+  if (options.enableResize && (width > options.maxWidth || height > options.maxHeight)) {
     const ar = width / height;
     if (width > height) {
-      width = Math.min(width, maxWidth);
+      width = Math.min(width, options.maxWidth);
       height = Math.round(width / ar);
     } else {
-      height = Math.min(height, maxHeight);
+      height = Math.min(height, options.maxHeight);
       width = Math.round(height * ar);
     }
   }
@@ -3090,18 +3117,38 @@ async function convertImageToWebP(file, quality01, enableResize, maxWidth, maxHe
   const ctx = canvas.getContext("2d");
   ctx.drawImage(bmp, 0, 0, width, height);
   const { data } = ctx.getImageData(0, 0, width, height);
-  const rgba = data instanceof Uint8ClampedArray ? new Uint8Array(data.buffer) : data;
-  const q = Math.max(0, Math.min(100, Math.round(quality01 <= 1 ? quality01 * 100 : quality01)));
+  let rgba = data instanceof Uint8ClampedArray ? new Uint8Array(data.buffer) : data;
+  if (options.enableGrayscale) {
+    rgba = convertToGrayscale(rgba);
+  }
+  const q = Math.max(0, Math.min(100, Math.round(options.quality <= 1 ? options.quality * 100 : options.quality)));
   const encoded = await encode({ data: rgba, width, height }, { quality: q });
   const bytes = encoded instanceof Uint8Array ? encoded : new Uint8Array(encoded);
   return new Blob([bytes], { type: "image/webp" });
 }
 
 // src/file-service.ts
-async function saveImageAndInsert(app, file, settings, quality, enableResize, maxWidth, maxHeight) {
+function createProcessingOptions(settings, overrides) {
+  return {
+    quality: settings.quality,
+    enableResize: settings.enableResize,
+    maxWidth: settings.maxWidth,
+    maxHeight: settings.maxHeight,
+    enableGrayscale: settings.enableGrayscale,
+    ...overrides
+  };
+}
+async function saveImageAndInsert(app, file, settings, quality, enableResize, maxWidth, maxHeight, enableGrayscale = false) {
   const folder = settings.attachmentFolder;
   const timestamp = window.moment().format("YYYYMMDD[T]HHmmss");
-  const webpBlob = await convertImageToWebP(file, quality, enableResize, maxWidth, maxHeight);
+  const processingOptions = createProcessingOptions(settings, {
+    quality,
+    enableResize,
+    maxWidth,
+    maxHeight,
+    enableGrayscale
+  });
+  const webpBlob = await convertImageToWebP(file, processingOptions);
   const webpSizeKB = (webpBlob.size / 1024).toFixed(2);
   const fileName = `IMG-${timestamp}-${webpSizeKB}.webp`;
   const destPath = `${folder}/${fileName}`;
@@ -3207,6 +3254,22 @@ async function openImageConverterModal(app, baseSettings) {
     resizeText.style.fontSize = "14px";
     resizeRow.appendChild(resizeCheckbox);
     resizeRow.appendChild(resizeText);
+    const grayscaleRow = document.createElement("div");
+    grayscaleRow.style.display = "flex";
+    grayscaleRow.style.alignItems = "center";
+    grayscaleRow.style.marginBottom = "15px";
+    grayscaleRow.style.gap = "8px";
+    const grayscaleCheckbox = document.createElement("input");
+    grayscaleCheckbox.type = "checkbox";
+    grayscaleCheckbox.checked = settings.enableGrayscale;
+    grayscaleCheckbox.id = "enableGrayscale";
+    const grayscaleText = document.createElement("label");
+    grayscaleText.htmlFor = "enableGrayscale";
+    grayscaleText.textContent = "Grayscale";
+    grayscaleText.style.cursor = "pointer";
+    grayscaleText.style.fontSize = "14px";
+    grayscaleRow.appendChild(grayscaleCheckbox);
+    grayscaleRow.appendChild(grayscaleText);
     const maxWidthLabel = document.createElement("label");
     maxWidthLabel.textContent = "Max Width:";
     maxWidthLabel.style.display = "block";
@@ -3241,6 +3304,7 @@ async function openImageConverterModal(app, baseSettings) {
     folderInfo.textContent = `Save to: ${settings.attachmentFolder}/`;
     rightColumn.appendChild(qualityLabel);
     rightColumn.appendChild(qualityInput);
+    rightColumn.appendChild(grayscaleRow);
     rightColumn.appendChild(resizeRow);
     rightColumn.appendChild(maxWidthLabel);
     rightColumn.appendChild(maxW);
@@ -3350,6 +3414,7 @@ async function openImageConverterModal(app, baseSettings) {
         convertBtn.textContent = "Converting...";
         const quality = parseFloat(qualityInput.value);
         const doResize = resizeCheckbox.checked;
+        const doGrayscale = grayscaleCheckbox.checked;
         const currentMaxW = parseInt(maxW.value) || settings.maxWidth;
         const currentMaxH = parseInt(maxH.value) || settings.maxHeight;
         const result = await saveImageAndInsert(
@@ -3359,7 +3424,8 @@ async function openImageConverterModal(app, baseSettings) {
           quality,
           doResize,
           currentMaxW,
-          currentMaxH
+          currentMaxH,
+          doGrayscale
         );
         const fileName = result.path.split("/").pop();
         const markdownLink = `![[${fileName}]]`;
@@ -3442,10 +3508,14 @@ var WasmImageConverterSettingTab = class extends import_obsidian2.PluginSettingT
       this.plugin.settings.autoReadClipboard = value;
       await this.plugin.saveSettings();
     }));
+    new import_obsidian2.Setting(containerEl).setName("Convert to grayscale").setDesc("Convert images to grayscale before WebP conversion for better compression of documents and diagrams").addToggle((toggle) => toggle.setValue(this.plugin.settings.enableGrayscale).onChange(async (value) => {
+      this.plugin.settings.enableGrayscale = value;
+      await this.plugin.saveSettings();
+    }));
     containerEl.createEl("h3", { text: "Preview" });
     const previewEl = containerEl.createEl("div", {
       cls: "setting-item-description",
-      text: `Current settings: Quality ${(this.plugin.settings.quality * 100).toFixed(0)}%, ${this.plugin.settings.enableResize ? `Max size ${this.plugin.settings.maxWidth}x${this.plugin.settings.maxHeight}` : "No resize"}, Save to "${this.plugin.settings.attachmentFolder}/"`
+      text: `Current settings: Quality ${(this.plugin.settings.quality * 100).toFixed(0)}%, ${this.plugin.settings.enableResize ? `Max size ${this.plugin.settings.maxWidth}x${this.plugin.settings.maxHeight}` : "No resize"}, ${this.plugin.settings.enableGrayscale ? "Grayscale enabled" : "Color"}, Save to "${this.plugin.settings.attachmentFolder}/"`
     });
   }
 };

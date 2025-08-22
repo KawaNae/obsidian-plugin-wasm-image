@@ -89,12 +89,23 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
+    new Setting(containerEl)
+      .setName("Convert to grayscale")
+      .setDesc("Convert images to grayscale before WebP conversion for better compression of documents and diagrams")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.enableGrayscale)
+        .onChange(async (value) => {
+          this.plugin.settings.enableGrayscale = value;
+          await this.plugin.saveSettings();
+        }));
+
     containerEl.createEl("h3", { text: "Preview" });
     
     const previewEl = containerEl.createEl("div", { 
       cls: "setting-item-description",
       text: `Current settings: Quality ${(this.plugin.settings.quality * 100).toFixed(0)}%, ` +
             `${this.plugin.settings.enableResize ? `Max size ${this.plugin.settings.maxWidth}x${this.plugin.settings.maxHeight}` : "No resize"}, ` +
+            `${this.plugin.settings.enableGrayscale ? "Grayscale enabled" : "Color"}, ` +
             `Save to "${this.plugin.settings.attachmentFolder}/"`
     });
   }

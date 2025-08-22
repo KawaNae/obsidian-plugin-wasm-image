@@ -1,6 +1,6 @@
 import { App, Notice } from "obsidian";
 import { ConverterSettings } from "./settings";
-import { saveImageAndInsert } from "./file-service";
+import { saveImageAndInsert, createProcessingOptions } from "./file-service";
 
 export async function openImageConverterModal(app: App, baseSettings: ConverterSettings): Promise<string | undefined> {
   const settings: ConverterSettings = { ...baseSettings };
@@ -118,6 +118,27 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
     resizeRow.appendChild(resizeCheckbox);
     resizeRow.appendChild(resizeText);
 
+    // Grayscale checkbox
+    const grayscaleRow = document.createElement("div");
+    grayscaleRow.style.display = "flex";
+    grayscaleRow.style.alignItems = "center";
+    grayscaleRow.style.marginBottom = "15px";
+    grayscaleRow.style.gap = "8px";
+
+    const grayscaleCheckbox = document.createElement("input");
+    grayscaleCheckbox.type = "checkbox";
+    grayscaleCheckbox.checked = settings.enableGrayscale;
+    grayscaleCheckbox.id = "enableGrayscale";
+
+    const grayscaleText = document.createElement("label");
+    grayscaleText.htmlFor = "enableGrayscale";
+    grayscaleText.textContent = "Grayscale";
+    grayscaleText.style.cursor = "pointer";
+    grayscaleText.style.fontSize = "14px";
+
+    grayscaleRow.appendChild(grayscaleCheckbox);
+    grayscaleRow.appendChild(grayscaleText);
+
     // Max Width
     const maxWidthLabel = document.createElement("label");
     maxWidthLabel.textContent = "Max Width:";
@@ -160,6 +181,7 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
 
     rightColumn.appendChild(qualityLabel);
     rightColumn.appendChild(qualityInput);
+    rightColumn.appendChild(grayscaleRow);
     rightColumn.appendChild(resizeRow);
     rightColumn.appendChild(maxWidthLabel);
     rightColumn.appendChild(maxW);
@@ -294,6 +316,7 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
 
         const quality = parseFloat(qualityInput.value);
         const doResize = resizeCheckbox.checked;
+        const doGrayscale = grayscaleCheckbox.checked;
         const currentMaxW = parseInt(maxW.value) || settings.maxWidth;
         const currentMaxH = parseInt(maxH.value) || settings.maxHeight;
 
@@ -304,7 +327,8 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
           quality,
           doResize,
           currentMaxW,
-          currentMaxH
+          currentMaxH,
+          doGrayscale
         );
         const fileName = result.path.split("/").pop()!;
         const markdownLink = `![[${fileName}]]`;
