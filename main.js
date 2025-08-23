@@ -3188,6 +3188,32 @@ async function saveImageAndInsert(app, file, settings, quality, enableResize, ma
   return { path: destPath, originalSize: file.size, convertedSize: convertedBlob.size };
 }
 
+// src/prediction/size-predictor.ts
+var SizePredictionService = class {
+  constructor() {
+    this.predictors = /* @__PURE__ */ new Map();
+  }
+  registerPredictor(predictor) {
+    this.predictors.set(predictor.supportedType, predictor);
+  }
+  async predictSize(originalFile, options) {
+    const predictor = this.predictors.get(options.converterType);
+    if (!predictor) {
+      return null;
+    }
+    try {
+      return await predictor.predict(originalFile, options);
+    } catch (error) {
+      console.warn("Size prediction failed:", error);
+      return null;
+    }
+  }
+  getSupportedTypes() {
+    return Array.from(this.predictors.keys());
+  }
+};
+var sizePredictionService = new SizePredictionService();
+
 // src/image-converter-modal.ts
 async function openImageConverterModal(app, baseSettings) {
   const settings = { ...baseSettings };
@@ -3418,6 +3444,12 @@ async function openImageConverterModal(app, baseSettings) {
     folderInfo.style.fontSize = "12px";
     folderInfo.style.color = "var(--text-muted)";
     folderInfo.textContent = `Save to: ${settings.attachmentFolder}/`;
+    const predictionInfo = document.createElement("div");
+    predictionInfo.style.fontSize = "12px";
+    predictionInfo.style.color = "var(--text-accent)";
+    predictionInfo.style.marginTop = "5px";
+    predictionInfo.style.display = "none";
+    predictionInfo.textContent = "Select an image to see size prediction";
     presetRow.appendChild(presetLabel);
     presetRow.appendChild(presetSelect);
     converterRow.appendChild(converterLabel);
@@ -3436,6 +3468,7 @@ async function openImageConverterModal(app, baseSettings) {
     rightColumn.appendChild(maxWidthRow);
     rightColumn.appendChild(maxHeightRow);
     rightColumn.appendChild(folderInfo);
+    rightColumn.appendChild(predictionInfo);
     mainContent.appendChild(leftColumn);
     mainContent.appendChild(rightColumn);
     modal.appendChild(mainContent);
@@ -3477,6 +3510,48 @@ async function openImageConverterModal(app, baseSettings) {
       grayscaleCheckbox.checked = preset.enableGrayscale;
       settings.attachmentFolder = preset.attachmentFolder;
       folderInfo.textContent = `Save to: ${preset.attachmentFolder}/`;
+      updateSizePrediction();
+    }
+    async function updateFileInfoWithPrediction() {
+      if (!selectedFile) {
+        const info2 = preview.querySelector("div:last-child");
+        if (info2) {
+          info2.textContent = "";
+        }
+        return;
+      }
+      const originalKB = (selectedFile.size / 1024).toFixed(1);
+      let infoText = `${selectedFile.name}: ${originalKB}kB`;
+      try {
+        const quality = parseFloat(qualityInput.value) || settings.quality;
+        const doResize = resizeCheckbox.checked;
+        const doGrayscale = grayscaleCheckbox.checked;
+        const currentMaxW = parseInt(maxW.value) || settings.maxWidth;
+        const currentMaxH = parseInt(maxH.value) || settings.maxHeight;
+        const converterType = converterSelect.value;
+        const predictionResult = await sizePredictionService.predictSize(selectedFile, {
+          converterType,
+          quality,
+          enableGrayscale: doGrayscale,
+          enableResize: doResize,
+          maxWidth: currentMaxW,
+          maxHeight: currentMaxH
+        });
+        if (predictionResult) {
+          const predictedKB = (predictionResult.predictedSize / 1024).toFixed(1);
+          const compressionRatio = ((selectedFile.size - predictionResult.predictedSize) / selectedFile.size * 100).toFixed(0);
+          infoText += ` \u2192 <span style="color: var(--text-accent);">Expected: ${predictedKB}kB (-${compressionRatio}%)</span>`;
+        }
+      } catch (error) {
+        console.warn("Size prediction failed:", error);
+      }
+      const info = preview.querySelector("div:last-child");
+      if (info) {
+        info.innerHTML = infoText;
+      }
+    }
+    async function updateSizePrediction() {
+      await updateFileInfoWithPrediction();
     }
     async function handleFileSelect(file) {
       if (!file || !file.type.startsWith("image/")) {
@@ -3498,8 +3573,8 @@ async function openImageConverterModal(app, baseSettings) {
       info.style.fontSize = "12px";
       info.style.color = "var(--text-muted)";
       info.style.marginTop = "5px";
-      info.textContent = `Original: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
       preview.appendChild(info);
+      await updateFileInfoWithPrediction();
     }
     const fileInput = document.createElement("input");
     fileInput.type = "file";
@@ -3541,11 +3616,13 @@ async function openImageConverterModal(app, baseSettings) {
     converterSelect.addEventListener("change", () => {
       settings.converterType = converterSelect.value;
       presetSelect.value = "default";
+      updateSizePrediction();
     });
     const inputElements = [qualityInput, maxW, maxH, resizeCheckbox, grayscaleCheckbox];
     inputElements.forEach((input) => {
       input.addEventListener("change", () => {
         presetSelect.value = "default";
+        updateSizePrediction();
       });
     });
     clipboardBtn.addEventListener("click", async () => {
@@ -3843,6 +3920,160 @@ var PresetEditModal = class extends import_obsidian2.Modal {
   }
 };
 
+// src/prediction/webp-predictor.ts
+var WebPSizePredictor = class {
+  constructor() {
+    this.supportedType = "wasm-webp" /* WASM_WEBP */;
+  }
+  async predict(originalFile, options) {
+    const imageData = await this.analyzeImage(originalFile);
+    const effectiveDimensions = this.calculateEffectiveDimensions(
+      imageData.width,
+      imageData.height,
+      options
+    );
+    const predictedSize = this.calculateWebPSize(
+      originalFile.size,
+      imageData,
+      effectiveDimensions,
+      options
+    );
+    return {
+      predictedSize: Math.round(predictedSize),
+      confidence: this.calculateConfidence(originalFile, options),
+      method: "webp-heuristic"
+    };
+  }
+  async analyzeImage(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      img.onload = () => {
+        canvas.width = Math.min(img.width, 200);
+        canvas.height = Math.min(img.height, 200);
+        if (!ctx) {
+          resolve({
+            width: img.width,
+            height: img.height,
+            hasTransparency: false,
+            complexity: 0.5
+            // Default complexity
+          });
+          return;
+        }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        try {
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const analysis = this.analyzeImageData(imageData);
+          resolve({
+            width: img.width,
+            height: img.height,
+            hasTransparency: analysis.hasTransparency,
+            complexity: analysis.complexity
+          });
+        } catch (error) {
+          resolve({
+            width: img.width,
+            height: img.height,
+            hasTransparency: false,
+            complexity: 0.5
+          });
+        }
+      };
+      img.onerror = () => {
+        reject(new Error("Failed to load image for analysis"));
+      };
+      img.src = URL.createObjectURL(file);
+    });
+  }
+  analyzeImageData(imageData) {
+    const data = imageData.data;
+    const pixels = data.length / 4;
+    let hasTransparency = false;
+    let totalVariance = 0;
+    let sampleCount = 0;
+    for (let i = 0; i < data.length; i += 40) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const a = data[i + 3];
+      if (a < 255) {
+        hasTransparency = true;
+      }
+      if (i > 40) {
+        const prevR = data[i - 40];
+        const prevG = data[i - 39];
+        const prevB = data[i - 38];
+        const variance = Math.abs(r - prevR) + Math.abs(g - prevG) + Math.abs(b - prevB);
+        totalVariance += variance;
+        sampleCount++;
+      }
+    }
+    const avgVariance = sampleCount > 0 ? totalVariance / sampleCount : 0;
+    const complexity = Math.min(avgVariance / 255, 1);
+    return {
+      hasTransparency,
+      complexity
+    };
+  }
+  calculateEffectiveDimensions(originalWidth, originalHeight, options) {
+    if (!options.enableResize) {
+      return { width: originalWidth, height: originalHeight };
+    }
+    const aspectRatio = originalWidth / originalHeight;
+    const maxWidth = options.maxWidth;
+    const maxHeight = options.maxHeight;
+    if (originalWidth <= maxWidth && originalHeight <= maxHeight) {
+      return { width: originalWidth, height: originalHeight };
+    }
+    const scaleByWidth = maxWidth / originalWidth;
+    const scaleByHeight = maxHeight / originalHeight;
+    const scale = Math.min(scaleByWidth, scaleByHeight);
+    return {
+      width: Math.round(originalWidth * scale),
+      height: Math.round(originalHeight * scale)
+    };
+  }
+  calculateWebPSize(originalSize, imageData, effectiveDimensions, options) {
+    const predictedSize = this.webpSizePredict(
+      effectiveDimensions.width,
+      effectiveDimensions.height,
+      options.quality * 100,
+      // Convert 0-1 to 0-100
+      options.enableGrayscale,
+      imageData.complexity
+    );
+    const minimumSize = 1024;
+    return Math.max(predictedSize, minimumSize);
+  }
+  webpSizePredict(width, height, quality, isGray, colorComplexity) {
+    const pixels = width * height;
+    const channels = isGray ? 1 : 3;
+    const resolution = Math.max(0.85, 1 - Math.log10(pixels / 1e6) * 0.05);
+    const qualityFactor = Math.pow(quality / 100, 0.75);
+    const colorFactor = 0.5 + colorComplexity * 1;
+    return Math.round(pixels * channels * 0.08 * resolution * qualityFactor * colorFactor);
+  }
+  calculateConfidence(file, options) {
+    let confidence = 0.7;
+    const fileType = file.type.toLowerCase();
+    if (fileType.includes("jpeg") || fileType.includes("jpg")) {
+      confidence += 0.1;
+    } else if (fileType.includes("png")) {
+      confidence += 0.05;
+    }
+    const sizeMB = file.size / (1024 * 1024);
+    if (sizeMB < 0.1 || sizeMB > 50) {
+      confidence -= 0.2;
+    }
+    if (options.quality < 0.3 || options.quality > 0.95) {
+      confidence -= 0.1;
+    }
+    return Math.max(0.3, Math.min(0.9, confidence));
+  }
+};
+
 // src/main.ts
 var WasmImageConverterPlugin = class extends import_obsidian3.Plugin {
   constructor() {
@@ -3851,6 +4082,7 @@ var WasmImageConverterPlugin = class extends import_obsidian3.Plugin {
   }
   async onload() {
     await this.loadSettings();
+    sizePredictionService.registerPredictor(new WebPSizePredictor());
     this.addSettingTab(new WasmImageConverterSettingTab(this.app, this));
     this.addCommand({
       id: "wasm-webp-open-converter",

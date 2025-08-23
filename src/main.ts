@@ -2,12 +2,17 @@ import { Notice, Plugin } from "obsidian";
 import { ConverterSettings, DEFAULT_SETTINGS } from "./settings";
 import { openImageConverterModal } from "./image-converter-modal";
 import { WasmImageConverterSettingTab } from "./settings-tab";
+import { sizePredictionService } from "./prediction/size-predictor";
+import { WebPSizePredictor } from "./prediction/webp-predictor";
 
 export default class WasmImageConverterPlugin extends Plugin {
   settings: ConverterSettings = { ...DEFAULT_SETTINGS };
 
   async onload() {
     await this.loadSettings();
+
+    // Initialize size prediction service
+    sizePredictionService.registerPredictor(new WebPSizePredictor());
 
     this.addSettingTab(new WasmImageConverterSettingTab(this.app, this));
 

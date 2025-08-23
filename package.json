@@ -1,6 +1,6 @@
 {
   "name": "obsidian-wasm-image",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "Fast image to WebP conversion using WebAssembly for Obsidian",
   "private": true,
   "type": "module",

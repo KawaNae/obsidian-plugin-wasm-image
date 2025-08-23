@@ -1,6 +1,7 @@
 import { App, Notice } from "obsidian";
 import { ConverterSettings, PresetSettings, ConverterType, CONVERTER_OPTIONS } from "./settings";
 import { saveImageAndInsert, createProcessingOptions } from "./file-service";
+import { sizePredictionService } from "./prediction/size-predictor";
 
 export async function openImageConverterModal(app: App, baseSettings: ConverterSettings): Promise<string | undefined> {
   const settings: ConverterSettings = { ...baseSettings };
@@ -286,6 +287,14 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
     folderInfo.style.color = "var(--text-muted)";
     folderInfo.textContent = `Save to: ${settings.attachmentFolder}/`;
 
+    // Size prediction info
+    const predictionInfo = document.createElement("div");
+    predictionInfo.style.fontSize = "12px";
+    predictionInfo.style.color = "var(--text-accent)";
+    predictionInfo.style.marginTop = "5px";
+    predictionInfo.style.display = "none"; // Initially hidden
+    predictionInfo.textContent = "Select an image to see size prediction";
+
     // Add elements to their rows
     presetRow.appendChild(presetLabel);
     presetRow.appendChild(presetSelect);
@@ -306,6 +315,7 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
     rightColumn.appendChild(maxWidthRow);
     rightColumn.appendChild(maxHeightRow);
     rightColumn.appendChild(folderInfo);
+    rightColumn.appendChild(predictionInfo);
 
     mainContent.appendChild(leftColumn);
     mainContent.appendChild(rightColumn);
@@ -360,6 +370,59 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
       grayscaleCheckbox.checked = preset.enableGrayscale;
       settings.attachmentFolder = preset.attachmentFolder;
       folderInfo.textContent = `Save to: ${preset.attachmentFolder}/`;
+      updateSizePrediction();
+    }
+
+    async function updateFileInfoWithPrediction() {
+      if (!selectedFile) {
+        // Clear the info in preview
+        const info = preview.querySelector('div:last-child') as HTMLDivElement;
+        if (info) {
+          info.textContent = '';
+        }
+        return;
+      }
+
+      const originalKB = (selectedFile.size / 1024).toFixed(1);
+      let infoText = `${selectedFile.name}: ${originalKB}kB`;
+
+      try {
+        const quality = parseFloat(qualityInput.value) || settings.quality;
+        const doResize = resizeCheckbox.checked;
+        const doGrayscale = grayscaleCheckbox.checked;
+        const currentMaxW = parseInt(maxW.value) || settings.maxWidth;
+        const currentMaxH = parseInt(maxH.value) || settings.maxHeight;
+        const converterType = converterSelect.value as ConverterType;
+
+        const predictionResult = await sizePredictionService.predictSize(selectedFile, {
+          converterType,
+          quality,
+          enableGrayscale: doGrayscale,
+          enableResize: doResize,
+          maxWidth: currentMaxW,
+          maxHeight: currentMaxH
+        });
+
+        if (predictionResult) {
+          const predictedKB = (predictionResult.predictedSize / 1024).toFixed(1);
+          const compressionRatio = ((selectedFile.size - predictionResult.predictedSize) / selectedFile.size * 100).toFixed(0);
+          
+          infoText += ` → <span style="color: var(--text-accent);">Expected: ${predictedKB}kB (-${compressionRatio}%)</span>`;
+        }
+      } catch (error) {
+        console.warn('Size prediction failed:', error);
+      }
+
+      // Update the info div in the preview area (below the image)
+      const info = preview.querySelector('div:last-child') as HTMLDivElement;
+      if (info) {
+        info.innerHTML = infoText;
+      }
+    }
+
+    // Legacy function name for compatibility
+    async function updateSizePrediction() {
+      await updateFileInfoWithPrediction();
     }
 
     async function handleFileSelect(file: File) {
@@ -384,8 +447,10 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
       info.style.fontSize = "12px";
       info.style.color = "var(--text-muted)";
       info.style.marginTop = "5px";
-      info.textContent = `Original: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
       preview.appendChild(info);
+
+      // Update file info and size prediction when file is selected
+      await updateFileInfoWithPrediction();
     }
 
     // ===== File input =====
@@ -436,6 +501,7 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
     converterSelect.addEventListener("change", () => {
       settings.converterType = converterSelect.value as ConverterType;
       presetSelect.value = "default";
+      updateSizePrediction();
     });
 
     // ===== Input change handlers to switch to "Default" =====
@@ -443,6 +509,7 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
     inputElements.forEach(input => {
       input.addEventListener("change", () => {
         presetSelect.value = "default";
+        updateSizePrediction();
       });
     });
 
