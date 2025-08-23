@@ -183,7 +183,7 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
 
     const resizeText = document.createElement("label");
     resizeText.htmlFor = "enableResize";
-    resizeText.textContent = "Enable resize";
+    resizeText.textContent = "Resize";
     resizeText.style.cursor = "pointer";
     resizeText.style.fontSize = "14px";
     resizeText.style.minWidth = "80px";

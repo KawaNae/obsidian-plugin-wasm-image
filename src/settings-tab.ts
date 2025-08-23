@@ -288,7 +288,7 @@ class PresetEditModal extends Modal {
         }));
 
     new Setting(contentEl)
-      .setName("Enable resize")
+      .setName("Resize")
       .setDesc("Automatically resize images that exceed the maximum dimensions")
       .addToggle(toggle => toggle
         .setValue(enableResize)
