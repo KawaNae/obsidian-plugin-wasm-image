@@ -1,5 +1,7 @@
 # WASM Image Converter for Obsidian
 
+**Languages:** [🇺🇸 English](README.md) | [🇯🇵 日本語](README_ja.md)
+
 A fast, efficient image conversion plugin for Obsidian that converts images to WebP format using WebAssembly (WASM). This plugin works on both desktop and mobile platforms, with built-in WASM bundles for offline functionality.
 
 ## ✨ Features

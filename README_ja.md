@@ -1,5 +1,7 @@
 # WASM Image Converter for Obsidian
 
+**Languages:** [🇺🇸 English](README.md) | [🇯🇵 日本語](README_ja.md)
+
 Obsidian用の高速画像変換プラグインです。WebAssembly (WASM) をバンドルしているため、オフライン環境下でもデスクトップ・モバイルどちらでも動作します。
 
 ## ✨ 主な機能
