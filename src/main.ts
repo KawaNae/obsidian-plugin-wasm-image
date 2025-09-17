@@ -101,6 +101,41 @@ export default class WasmImageConverterPlugin extends Plugin {
         }
       })
     );
+
+    // Register paste event handler
+    this.registerEvent(
+      this.app.workspace.on("editor-paste", async (evt: ClipboardEvent, editor: Editor) => {
+        if (!evt.clipboardData) {
+          console.warn("ClipboardData object is null. Cannot process paste event.");
+          return;
+        }
+
+        const cursor = editor.getCursor();
+
+        // Extract clipboard item information
+        const itemData: { kind: string, type: string, file: File | null }[] = [];
+        for (let i = 0; i < evt.clipboardData.items.length; i++) {
+          const item = evt.clipboardData.items[i];
+          const file = item.kind === "file" ? item.getAsFile() : null;
+          itemData.push({ kind: item.kind, type: item.type, file });
+        }
+
+        // Check if we should process these items
+        const hasSupportedItems = itemData.some(data =>
+          data.kind === "file" &&
+          data.file &&
+          data.type.startsWith('image/') && 
+          ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'].some(ext => 
+            data.file!.name.toLowerCase().endsWith(`.${ext}`)
+          )
+        );
+
+        if (hasSupportedItems) {
+          evt.preventDefault();
+          await this.handleAutoPaste(itemData, editor, cursor);
+        }
+      })
+    );
   }
 
   private async handleAutoConvert(
@@ -159,6 +194,79 @@ export default class WasmImageConverterPlugin extends Plugin {
 
         // Insert link at drop position
         editor.replaceRange(markdownLink, pos);
+
+        // Show success notification with preset info
+        const originalKB = (result.originalSize / 1024).toFixed(2);
+        const convertedKB = (result.convertedSize / 1024).toFixed(2);
+        const ratio = (((result.originalSize - result.convertedSize) / result.originalSize) * 100).toFixed(1);
+        new Notice(`✅ Auto-converted (${selectedPreset.name}): ${file.name} → ${originalKB}KB → ${convertedKB}KB (${ratio}% compressed)`);
+
+      } catch (error) {
+        console.error("Auto-conversion failed:", error);
+        new Notice(`❌ Auto-conversion failed for ${file.name}`);
+      }
+    }
+  }
+
+  private async handleAutoPaste(
+    itemData: { kind: string; type: string; file: File | null }[], 
+    editor: Editor, 
+    cursor: any
+  ) {
+    // Filter supported image files
+    const supportedFiles = itemData
+      .filter(data => 
+        data.kind === "file" &&
+        data.file &&
+        data.type.startsWith('image/') && 
+        ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'].some(ext => 
+          data.file!.name.toLowerCase().endsWith(`.${ext}`)
+        )
+      )
+      .map(data => data.file!)
+      .filter((file): file is File => file !== null);
+
+    if (supportedFiles.length === 0) return;
+
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!activeFile) {
+      new Notice('No active file detected.');
+      return;
+    }
+
+    // Get the selected preset for auto-conversion
+    const selectedPreset = this.settings.presets.find(p => p.name === this.settings.autoConvertPreset) 
+      || this.settings.presets.find(p => p.name === "Default") 
+      || this.settings.presets[0];
+
+    if (!selectedPreset) {
+      new Notice('❌ No preset found for auto-conversion');
+      return;
+    }
+
+    // Process each file sequentially
+    for (const file of supportedFiles) {
+      try {
+        // Update the settings to use the preset's attachment folder
+        const settings = { ...this.settings, attachmentFolder: selectedPreset.attachmentFolder };
+
+        const result = await saveImageAndInsert(
+          this.app,
+          file,
+          settings,
+          selectedPreset.quality,
+          selectedPreset.enableResize,
+          selectedPreset.maxWidth,
+          selectedPreset.maxHeight,
+          selectedPreset.enableGrayscale,
+          selectedPreset.converterType
+        );
+
+        const fileName = result.path.split("/").pop()!;
+        const markdownLink = `![[${fileName}]]`;
+
+        // Insert link at cursor position
+        editor.replaceRange(markdownLink, cursor);
 
         // Show success notification with preset info
         const originalKB = (result.originalSize / 1024).toFixed(2);

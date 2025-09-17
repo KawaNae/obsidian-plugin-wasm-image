@@ -4171,6 +4171,30 @@ var WasmImageConverterPlugin = class extends import_obsidian3.Plugin {
         }
       })
     );
+    this.registerEvent(
+      this.app.workspace.on("editor-paste", async (evt, editor) => {
+        if (!evt.clipboardData) {
+          console.warn("ClipboardData object is null. Cannot process paste event.");
+          return;
+        }
+        const cursor = editor.getCursor();
+        const itemData = [];
+        for (let i = 0; i < evt.clipboardData.items.length; i++) {
+          const item = evt.clipboardData.items[i];
+          const file = item.kind === "file" ? item.getAsFile() : null;
+          itemData.push({ kind: item.kind, type: item.type, file });
+        }
+        const hasSupportedItems = itemData.some(
+          (data) => data.kind === "file" && data.file && data.type.startsWith("image/") && ["jpg", "jpeg", "png", "gif", "bmp", "tiff"].some(
+            (ext) => data.file.name.toLowerCase().endsWith(`.${ext}`)
+          )
+        );
+        if (hasSupportedItems) {
+          evt.preventDefault();
+          await this.handleAutoPaste(itemData, editor, cursor);
+        }
+      })
+    );
   }
   async handleAutoConvert(fileData, editor, pos) {
     const supportedFiles = fileData.filter((data) => {
@@ -4206,6 +4230,50 @@ var WasmImageConverterPlugin = class extends import_obsidian3.Plugin {
         const fileName = result.path.split("/").pop();
         const markdownLink = `![[${fileName}]]`;
         editor.replaceRange(markdownLink, pos);
+        const originalKB = (result.originalSize / 1024).toFixed(2);
+        const convertedKB = (result.convertedSize / 1024).toFixed(2);
+        const ratio = ((result.originalSize - result.convertedSize) / result.originalSize * 100).toFixed(1);
+        new import_obsidian3.Notice(`\u2705 Auto-converted (${selectedPreset.name}): ${file.name} \u2192 ${originalKB}KB \u2192 ${convertedKB}KB (${ratio}% compressed)`);
+      } catch (error) {
+        console.error("Auto-conversion failed:", error);
+        new import_obsidian3.Notice(`\u274C Auto-conversion failed for ${file.name}`);
+      }
+    }
+  }
+  async handleAutoPaste(itemData, editor, cursor) {
+    const supportedFiles = itemData.filter(
+      (data) => data.kind === "file" && data.file && data.type.startsWith("image/") && ["jpg", "jpeg", "png", "gif", "bmp", "tiff"].some(
+        (ext) => data.file.name.toLowerCase().endsWith(`.${ext}`)
+      )
+    ).map((data) => data.file).filter((file) => file !== null);
+    if (supportedFiles.length === 0) return;
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!activeFile) {
+      new import_obsidian3.Notice("No active file detected.");
+      return;
+    }
+    const selectedPreset = this.settings.presets.find((p) => p.name === this.settings.autoConvertPreset) || this.settings.presets.find((p) => p.name === "Default") || this.settings.presets[0];
+    if (!selectedPreset) {
+      new import_obsidian3.Notice("\u274C No preset found for auto-conversion");
+      return;
+    }
+    for (const file of supportedFiles) {
+      try {
+        const settings = { ...this.settings, attachmentFolder: selectedPreset.attachmentFolder };
+        const result = await saveImageAndInsert(
+          this.app,
+          file,
+          settings,
+          selectedPreset.quality,
+          selectedPreset.enableResize,
+          selectedPreset.maxWidth,
+          selectedPreset.maxHeight,
+          selectedPreset.enableGrayscale,
+          selectedPreset.converterType
+        );
+        const fileName = result.path.split("/").pop();
+        const markdownLink = `![[${fileName}]]`;
+        editor.replaceRange(markdownLink, cursor);
         const originalKB = (result.originalSize / 1024).toFixed(2);
         const convertedKB = (result.convertedSize / 1024).toFixed(2);
         const ratio = ((result.originalSize - result.convertedSize) / result.originalSize * 100).toFixed(1);
