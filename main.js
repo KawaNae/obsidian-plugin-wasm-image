@@ -2997,6 +2997,10 @@ var DEFAULT_SETTINGS = {
   autoReadClipboard: false,
   // デフォルトはオフ（iPadでの問題回避）
   enableGrayscale: DEFAULT_PRESET.enableGrayscale,
+  enableAutoConvert: false,
+  // デフォルトはオフ（従来動作を維持）
+  autoConvertPreset: "Default",
+  // デフォルトプリセットを使用
   presets: [...DEFAULT_PRESETS]
   // デフォルトプリセット
 };
@@ -3359,7 +3363,7 @@ async function openImageConverterModal(app, baseSettings) {
     resizeCheckbox.id = "enableResize";
     const resizeText = document.createElement("label");
     resizeText.htmlFor = "enableResize";
-    resizeText.textContent = "Enable resize";
+    resizeText.textContent = "Resize";
     resizeText.style.cursor = "pointer";
     resizeText.style.fontSize = "14px";
     resizeText.style.minWidth = "80px";
@@ -3724,6 +3728,22 @@ var WasmImageConverterSettingTab = class extends import_obsidian2.PluginSettingT
       this.plugin.settings.autoReadClipboard = value;
       await this.plugin.saveSettings();
     }));
+    new import_obsidian2.Setting(containerEl).setName("Auto-convert on drag & drop").setDesc("Automatically convert images when dragging and dropping them into the editor (desktop only)").addToggle((toggle) => toggle.setValue(this.plugin.settings.enableAutoConvert).onChange(async (value) => {
+      this.plugin.settings.enableAutoConvert = value;
+      await this.plugin.saveSettings();
+    }));
+    new import_obsidian2.Setting(containerEl).setName("Auto-convert preset").setDesc("Which preset to use for automatic conversion on drag & drop").addDropdown((dropdown) => {
+      this.plugin.settings.presets.forEach((preset) => {
+        dropdown.addOption(preset.name, preset.name);
+      });
+      const currentPreset = this.plugin.settings.autoConvertPreset;
+      const presetExists = this.plugin.settings.presets.some((p) => p.name === currentPreset);
+      dropdown.setValue(presetExists ? currentPreset : "Default");
+      dropdown.onChange(async (value) => {
+        this.plugin.settings.autoConvertPreset = value;
+        await this.plugin.saveSettings();
+      });
+    });
     containerEl.createEl("h3", { text: "Conversion Presets" });
     const presetsDesc = containerEl.createEl("div", {
       cls: "setting-item-description",
@@ -3870,7 +3890,7 @@ var PresetEditModal = class extends import_obsidian2.Modal {
     new import_obsidian2.Setting(contentEl).setName("Convert to grayscale").setDesc("Convert images to grayscale before WebP conversion").addToggle((toggle) => toggle.setValue(enableGrayscale).onChange((value) => {
       enableGrayscale = value;
     }));
-    new import_obsidian2.Setting(contentEl).setName("Enable resize").setDesc("Automatically resize images that exceed the maximum dimensions").addToggle((toggle) => toggle.setValue(enableResize).onChange((value) => {
+    new import_obsidian2.Setting(contentEl).setName("Resize").setDesc("Automatically resize images that exceed the maximum dimensions").addToggle((toggle) => toggle.setValue(enableResize).onChange((value) => {
       enableResize = value;
     }));
     new import_obsidian2.Setting(contentEl).setName("Maximum width").setDesc("Maximum width in pixels for resized images").addText((text) => text.setPlaceholder("1920").setValue(String(maxWidth)).onChange((value) => {
@@ -4084,6 +4104,7 @@ var WasmImageConverterPlugin = class extends import_obsidian3.Plugin {
     await this.loadSettings();
     sizePredictionService.registerPredictor(new WebPSizePredictor());
     this.addSettingTab(new WasmImageConverterSettingTab(this.app, this));
+    this.registerAutoConvertEvents();
     this.addCommand({
       id: "wasm-webp-open-converter",
       name: "Convert Image",
@@ -4120,5 +4141,79 @@ var WasmImageConverterPlugin = class extends import_obsidian3.Plugin {
   }
   async saveSettings() {
     await this.saveData(this.settings);
+  }
+  registerAutoConvertEvents() {
+    if (!this.settings.enableAutoConvert || import_obsidian3.Platform.isMobile) return;
+    this.registerEvent(
+      this.app.workspace.on("editor-drop", async (evt, editor) => {
+        if (!evt.dataTransfer) {
+          console.warn("DataTransfer object is null. Cannot process drop event.");
+          return;
+        }
+        const pos = editor.posAtMouse(evt);
+        if (!pos) {
+          console.warn("Could not determine drop position");
+          return;
+        }
+        const fileData = [];
+        for (let i = 0; i < evt.dataTransfer.files.length; i++) {
+          const file = evt.dataTransfer.files[i];
+          fileData.push({ name: file.name, type: file.type, file });
+        }
+        const hasSupportedFiles = fileData.some((data) => {
+          return data.type.startsWith("image/") && ["jpg", "jpeg", "png", "gif", "bmp", "tiff"].some(
+            (ext) => data.name.toLowerCase().endsWith(`.${ext}`)
+          );
+        });
+        if (hasSupportedFiles) {
+          evt.preventDefault();
+          await this.handleAutoConvert(fileData, editor, pos);
+        }
+      })
+    );
+  }
+  async handleAutoConvert(fileData, editor, pos) {
+    const supportedFiles = fileData.filter((data) => {
+      return data.type.startsWith("image/") && ["jpg", "jpeg", "png", "gif", "bmp", "tiff"].some(
+        (ext) => data.name.toLowerCase().endsWith(`.${ext}`)
+      );
+    }).map((data) => data.file);
+    if (supportedFiles.length === 0) return;
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!activeFile) {
+      new import_obsidian3.Notice("No active file detected.");
+      return;
+    }
+    const selectedPreset = this.settings.presets.find((p) => p.name === this.settings.autoConvertPreset) || this.settings.presets.find((p) => p.name === "Default") || this.settings.presets[0];
+    if (!selectedPreset) {
+      new import_obsidian3.Notice("\u274C No preset found for auto-conversion");
+      return;
+    }
+    for (const file of supportedFiles) {
+      try {
+        const settings = { ...this.settings, attachmentFolder: selectedPreset.attachmentFolder };
+        const result = await saveImageAndInsert(
+          this.app,
+          file,
+          settings,
+          selectedPreset.quality,
+          selectedPreset.enableResize,
+          selectedPreset.maxWidth,
+          selectedPreset.maxHeight,
+          selectedPreset.enableGrayscale,
+          selectedPreset.converterType
+        );
+        const fileName = result.path.split("/").pop();
+        const markdownLink = `![[${fileName}]]`;
+        editor.replaceRange(markdownLink, pos);
+        const originalKB = (result.originalSize / 1024).toFixed(2);
+        const convertedKB = (result.convertedSize / 1024).toFixed(2);
+        const ratio = ((result.originalSize - result.convertedSize) / result.originalSize * 100).toFixed(1);
+        new import_obsidian3.Notice(`\u2705 Auto-converted (${selectedPreset.name}): ${file.name} \u2192 ${originalKB}KB \u2192 ${convertedKB}KB (${ratio}% compressed)`);
+      } catch (error) {
+        console.error("Auto-conversion failed:", error);
+        new import_obsidian3.Notice(`\u274C Auto-conversion failed for ${file.name}`);
+      }
+    }
   }
 };

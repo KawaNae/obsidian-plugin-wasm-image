@@ -36,6 +36,36 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
+    new Setting(containerEl)
+      .setName("Auto-convert on drag & drop")
+      .setDesc("Automatically convert images when dragging and dropping them into the editor (desktop only)")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.enableAutoConvert)
+        .onChange(async (value) => {
+          this.plugin.settings.enableAutoConvert = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("Auto-convert preset")
+      .setDesc("Which preset to use for automatic conversion on drag & drop")
+      .addDropdown(dropdown => {
+        // Populate dropdown with available presets
+        this.plugin.settings.presets.forEach((preset) => {
+          dropdown.addOption(preset.name, preset.name);
+        });
+        
+        // Set current value, fallback to "Default" if preset doesn't exist
+        const currentPreset = this.plugin.settings.autoConvertPreset;
+        const presetExists = this.plugin.settings.presets.some(p => p.name === currentPreset);
+        dropdown.setValue(presetExists ? currentPreset : "Default");
+        
+        dropdown.onChange(async (value) => {
+          this.plugin.settings.autoConvertPreset = value;
+          await this.plugin.saveSettings();
+        });
+      });
+
 
     // ===== Presets Section =====
     containerEl.createEl("h3", { text: "Conversion Presets" });

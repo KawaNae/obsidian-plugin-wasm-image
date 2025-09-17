@@ -31,6 +31,8 @@ export interface ConverterSettings {
   attachmentFolder: string; // 保存先
   autoReadClipboard: boolean; // 起動時クリップボード自動読み取り
   enableGrayscale: boolean; // グレースケール変換
+  enableAutoConvert: boolean; // ドラッグ&ドロップ時の自動変換
+  autoConvertPreset: string; // 自動変換時に使用するプリセット名
   presets: PresetSettings[]; // プリセット
 }
 
@@ -58,5 +60,7 @@ export const DEFAULT_SETTINGS: ConverterSettings = {
   attachmentFolder: DEFAULT_PRESET.attachmentFolder,
   autoReadClipboard: false, // デフォルトはオフ（iPadでの問題回避）
   enableGrayscale: DEFAULT_PRESET.enableGrayscale,
+  enableAutoConvert: false, // デフォルトはオフ（従来動作を維持）
+  autoConvertPreset: "Default", // デフォルトプリセットを使用
   presets: [...DEFAULT_PRESETS], // デフォルトプリセット
 };
