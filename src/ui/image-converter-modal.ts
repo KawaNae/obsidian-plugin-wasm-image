@@ -2,6 +2,8 @@ import { App, Notice } from "obsidian";
 import { ConverterSettings } from "../settings";
 import { saveImageAndInsert } from "../file-service";
 import { sizePredictionService } from "../prediction/size-predictor";
+
+import { isAnimatedGif } from "../utils/gif-check";
 import { DropZone, ClipboardButton } from "./components/drop-zone";
 import { SettingsPanel } from "./components/settings-panel";
 import { PreviewArea } from "./components/preview-area";
@@ -77,11 +79,20 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
             previewArea.updateInfo(infoText);
         };
 
-        const handleFileSelect = (file: File) => {
+        const handleFileSelect = async (file: File) => {
             if (!file || !file.type.startsWith("image/")) {
                 new Notice("❌ Please select a valid image file");
                 return;
             }
+
+            if (file.type === 'image/gif' && await isAnimatedGif(file)) {
+                new Notice("⚠️ Animated GIF detected. Conversion will result in a static image (first frame only).");
+                // We don't block it, just warn, as per user request to "exclude from conversion target", which implies auto-convert.
+                // But for manual convert, they might WANT to clear animation or just take first frame.
+                // However, usually "exclude" means "don't do it".
+                // Let's add a visual warning in the preview area too.
+            }
+
             selectedFile = file;
             convertBtn.disabled = false;
 

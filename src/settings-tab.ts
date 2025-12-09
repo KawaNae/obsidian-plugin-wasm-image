@@ -67,33 +67,79 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
       });
 
 
-    new Setting(containerEl)
-      .setName("Batch convert target extensions")
-      .setDesc("Select which image extensions to convert when running batch conversion")
-      .setClass('batch-convert-extensions');
+    containerEl.createEl("h4", { text: "Batch or Auto convert target extensions" });
+
+    const targetExtDesc = containerEl.createDiv({
+      cls: "setting-item-description",
+      text: "Select which image extensions to convert (Applies to both Batch Convert and Auto-Convert)"
+    });
+    targetExtDesc.style.marginBottom = "10px";
 
     // Create checkboxes for each extension
     const extensionsContainer = containerEl.createDiv('batch-convert-extensions-container');
     const availableExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'];
 
     availableExtensions.forEach(ext => {
-      new Setting(extensionsContainer)
-        .setName(ext.toUpperCase())
-        .addToggle(toggle => toggle
-          .setValue(this.plugin.settings.batchConvertExtensions.includes(ext))
-          .onChange(async (value) => {
-            if (value) {
-              // Add extension if not already present
-              if (!this.plugin.settings.batchConvertExtensions.includes(ext)) {
-                this.plugin.settings.batchConvertExtensions.push(ext);
+      // Special handling for GIF to include nested "Animated GIF" setting
+      if (ext === 'gif') {
+        const isGifEnabled = this.plugin.settings.batchConvertExtensions.includes('gif');
+
+        // Parent GIF setting
+        new Setting(extensionsContainer)
+          .setName('GIF')
+          .addToggle(toggle => toggle
+            .setValue(isGifEnabled)
+            .onChange(async (value) => {
+              if (value) {
+                if (!this.plugin.settings.batchConvertExtensions.includes('gif')) {
+                  this.plugin.settings.batchConvertExtensions.push('gif');
+                }
+              } else {
+                this.plugin.settings.batchConvertExtensions =
+                  this.plugin.settings.batchConvertExtensions.filter(e => e !== 'gif');
               }
-            } else {
-              // Remove extension
-              this.plugin.settings.batchConvertExtensions =
-                this.plugin.settings.batchConvertExtensions.filter(e => e !== ext);
-            }
-            await this.plugin.saveSettings();
-          }));
+              await this.plugin.saveSettings();
+              // Refresh to update child element state
+              this.display();
+            }));
+
+        // Nested Animated GIF setting
+        const animatedGifSetting = new Setting(extensionsContainer)
+          .setName("Animated GIF")
+          .setDesc("If enabled, animated GIFs will be converted to WebP (static). If disabled, original GIF is kept.")
+          .addToggle(toggle => toggle
+            .setValue(this.plugin.settings.processAnimatedGifs)
+            .setDisabled(!isGifEnabled) // Disable if parent is off
+            .onChange(async (value) => {
+              this.plugin.settings.processAnimatedGifs = value;
+              await this.plugin.saveSettings();
+            }));
+
+        // Add indentation style
+        animatedGifSetting.settingEl.style.marginLeft = "2em";
+        animatedGifSetting.settingEl.style.borderTop = "none";
+        if (!isGifEnabled) {
+          animatedGifSetting.settingEl.style.opacity = "0.5";
+        }
+
+      } else {
+        // Standard handling for other extensions
+        new Setting(extensionsContainer)
+          .setName(ext.toUpperCase())
+          .addToggle(toggle => toggle
+            .setValue(this.plugin.settings.batchConvertExtensions.includes(ext))
+            .onChange(async (value) => {
+              if (value) {
+                if (!this.plugin.settings.batchConvertExtensions.includes(ext)) {
+                  this.plugin.settings.batchConvertExtensions.push(ext);
+                }
+              } else {
+                this.plugin.settings.batchConvertExtensions =
+                  this.plugin.settings.batchConvertExtensions.filter(e => e !== ext);
+              }
+              await this.plugin.saveSettings();
+            }));
+      }
     });
 
 

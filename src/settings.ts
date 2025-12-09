@@ -33,6 +33,7 @@ export interface ConverterSettings {
   enableGrayscale: boolean; // グレースケール変換
   enableAutoConvert: boolean; // ドラッグ&ドロップ時の自動変換
   batchConvertExtensions: string[]; // バッチ変換対象の拡張子
+  processAnimatedGifs: boolean; // アニメーションGIFを変換するかどうか（変換すると静止画になる）
   autoConvertPreset: string; // 自動変換時に使用するプリセット名
   enableAutoOrganizeImages: boolean; // 新規画像の自動整理
   presets: PresetSettings[]; // プリセット
@@ -64,6 +65,7 @@ export const DEFAULT_SETTINGS: ConverterSettings = {
   enableGrayscale: DEFAULT_PRESET.enableGrayscale,
   enableAutoConvert: false, // デフォルトはオフ（従来動作を維持）
   batchConvertExtensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'], // デフォルトは全対象
+  processAnimatedGifs: false, // デフォルトは変換しない（アニメーション保持）
   autoConvertPreset: "Default", // デフォルトプリセットを使用
   enableAutoOrganizeImages: false, // デフォルトはオフ
   presets: [...DEFAULT_PRESETS], // デフォルトプリセット

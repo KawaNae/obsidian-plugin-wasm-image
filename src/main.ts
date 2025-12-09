@@ -4,7 +4,8 @@ import { openImageConverterModal } from "./ui/image-converter-modal";
 import { WasmImageConverterSettingTab } from "./settings-tab";
 import { sizePredictionService } from "./prediction/size-predictor";
 import { WebPSizePredictor } from "./prediction/webp-predictor";
-import { saveImageAndInsert } from "./file-service";
+import { saveImageAndInsert, saveOriginalFile } from "./file-service";
+import { isAnimatedGif } from "./utils/gif-check";
 
 export default class WasmImageConverterPlugin extends Plugin {
   settings: ConverterSettings = { ...DEFAULT_SETTINGS };
@@ -113,6 +114,20 @@ export default class WasmImageConverterPlugin extends Plugin {
 
       for (let i = 0; i < targetImages.length; i++) {
         const image = targetImages[i];
+
+        // Check Animated GIFs
+        if (image.extension.toLowerCase() === 'gif') {
+          const arrayBuffer = await this.app.vault.readBinary(image);
+          const blob = new Blob([arrayBuffer]);
+          if (await isAnimatedGif(blob)) {
+            if (!this.settings.processAnimatedGifs) {
+              new Notice(`Skipping animated GIF: ${image.name}`);
+              continue;
+            }
+            // If allowed, it will be converted (flattened to static)
+          }
+        }
+
         new Notice(`Converting ${i + 1}/${targetImages.length}: ${image.name}`);
 
         try {
@@ -279,7 +294,7 @@ export default class WasmImageConverterPlugin extends Plugin {
         // Check if we should process these files
         const hasSupportedFiles = fileData.some(data => {
           return data.type.startsWith('image/') &&
-            ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'].some(ext =>
+            this.settings.batchConvertExtensions.some(ext =>
               data.name.toLowerCase().endsWith(`.${ext}`)
             );
         });
@@ -314,7 +329,7 @@ export default class WasmImageConverterPlugin extends Plugin {
           data.kind === "file" &&
           data.file &&
           data.type.startsWith('image/') &&
-          ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'].some(ext =>
+          this.settings.batchConvertExtensions.some(ext =>
             data.file!.name.toLowerCase().endsWith(`.${ext}`)
           )
         );
@@ -336,7 +351,7 @@ export default class WasmImageConverterPlugin extends Plugin {
     const supportedFiles = fileData
       .filter(data => {
         return data.type.startsWith('image/') &&
-          ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'].some(ext =>
+          this.settings.batchConvertExtensions.some(ext =>
             data.name.toLowerCase().endsWith(`.${ext}`)
           );
       })
@@ -365,6 +380,25 @@ export default class WasmImageConverterPlugin extends Plugin {
       try {
         // Update the settings to use the preset's attachment folder
         const settings = { ...this.settings, attachmentFolder: selectedPreset.attachmentFolder };
+
+        // Skip animated GIF
+        if (file.type === 'image/gif' || file.name.toLowerCase().endsWith('.gif')) {
+          if (await isAnimatedGif(file)) {
+            if (!this.settings.processAnimatedGifs) {
+              new Notice(`⚠️ Skipped animated GIF conversion: ${file.name}`);
+              try {
+                const savedPath = await saveOriginalFile(this.app, file, settings.attachmentFolder);
+                const fileName = savedPath.split("/").pop()!;
+                const markdownLink = `![[${fileName}]]`;
+                editor.replaceRange(markdownLink, pos);
+              } catch (err) {
+                console.error("Failed to save original GIF:", err);
+                new Notice(`❌ Failed to save original GIF: ${file.name}`);
+              }
+              continue;
+            }
+          }
+        }
 
         const result = await saveImageAndInsert(
           this.app,
@@ -408,7 +442,7 @@ export default class WasmImageConverterPlugin extends Plugin {
         data.kind === "file" &&
         data.file &&
         data.type.startsWith('image/') &&
-        ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'].some(ext =>
+        this.settings.batchConvertExtensions.some(ext =>
           data.file!.name.toLowerCase().endsWith(`.${ext}`)
         )
       )
@@ -438,6 +472,25 @@ export default class WasmImageConverterPlugin extends Plugin {
       try {
         // Update the settings to use the preset's attachment folder
         const settings = { ...this.settings, attachmentFolder: selectedPreset.attachmentFolder };
+
+        // Skip animated GIF
+        if (file.type === 'image/gif' || file.name.toLowerCase().endsWith('.gif')) {
+          if (await isAnimatedGif(file)) {
+            if (!this.settings.processAnimatedGifs) {
+              new Notice(`⚠️ Skipped animated GIF conversion: ${file.name}`);
+              try {
+                const savedPath = await saveOriginalFile(this.app, file, settings.attachmentFolder);
+                const fileName = savedPath.split("/").pop()!;
+                const markdownLink = `![[${fileName}]]`;
+                editor.replaceRange(markdownLink, cursor);
+              } catch (err) {
+                console.error("Failed to save original GIF:", err);
+                new Notice(`❌ Failed to save original GIF: ${file.name}`);
+              }
+              continue;
+            }
+          }
+        }
 
         const result = await saveImageAndInsert(
           this.app,
@@ -510,14 +563,25 @@ export default class WasmImageConverterPlugin extends Plugin {
   }
 
   private isSupportedImageFile(file: TFile): boolean {
-    const supportedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'];
-    return supportedExtensions.includes(file.extension.toLowerCase());
+    return this.settings.batchConvertExtensions.includes(file.extension.toLowerCase());
   }
 
   private async organizeImage(imageFile: TFile): Promise<void> {
     console.log('[Auto-Organize] Starting organization for:', imageFile.name);
 
     try {
+      // Check for animated GIF
+      if (imageFile.extension.toLowerCase() === 'gif') {
+        const arrayBuffer = await this.app.vault.readBinary(imageFile);
+        const blob = new Blob([arrayBuffer]);
+        if (await isAnimatedGif(blob)) {
+          if (!this.settings.processAnimatedGifs) {
+            console.log('[Auto-Organize] Skipped animated GIF:', imageFile.name);
+            return;
+          }
+        }
+      }
+
       // Get the selected preset
       const selectedPreset = this.settings.presets.find(
         p => p.name === this.settings.autoConvertPreset
@@ -579,4 +643,5 @@ export default class WasmImageConverterPlugin extends Plugin {
       throw error;
     }
   }
+
 }

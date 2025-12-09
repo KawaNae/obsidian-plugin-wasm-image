@@ -34,7 +34,6 @@ export async function saveImageAndInsert(
   converterType: ConverterType = ConverterType.WASM_WEBP
 ): Promise<ConversionResult> {
   const folder = settings.attachmentFolder;
-  const timestamp = (window as any).moment().format("YYYYMMDD[T]HHmmss");
 
   const processingOptions: ImageProcessingOptions = createProcessingOptions(settings, {
     quality,
@@ -43,11 +42,11 @@ export async function saveImageAndInsert(
     maxHeight,
     enableGrayscale
   });
-  
+
   // Convert image based on converter type
   let convertedBlob: Blob;
   let fileExtension: string;
-  
+
   switch (converterType) {
     case ConverterType.WASM_WEBP:
     default:
@@ -60,9 +59,8 @@ export async function saveImageAndInsert(
     //   fileExtension = "avif";
     //   break;
   }
-  
-  const sizeKB = (convertedBlob.size / 1024).toFixed(2);
-  const fileName = `IMG-${timestamp}-${sizeKB}.${fileExtension}`;
+
+  const fileName = generateFileName(fileExtension, convertedBlob.size);
   const destPath = `${folder}/${fileName}`;
 
   // フォルダ無ければ作成
@@ -73,4 +71,33 @@ export async function saveImageAndInsert(
   await app.vault.adapter.writeBinary(destPath, ab);
 
   return { path: destPath, originalSize: file.size, convertedSize: convertedBlob.size };
+}
+
+/**
+ * Generates a consistent file name based on timestamp and size.
+ * Centralized for future customization (e.g. regex support).
+ */
+export function generateFileName(extension: string, sizeBytes: number): string {
+  const timestamp = (window as any).moment().format("YYYYMMDD[T]HHmmss");
+  const sizeKB = (sizeBytes / 1024).toFixed(2);
+  return `IMG-${timestamp}-${sizeKB}.${extension}`;
+}
+
+/**
+ * Saves the original file without conversion, but follows the plugin's naming and folder conventions.
+ */
+export async function saveOriginalFile(app: App, file: File, folder: string): Promise<string> {
+  const extension = file.name.split('.').pop() || 'unknown';
+  const fileName = generateFileName(extension, file.size);
+  const destPath = `${folder}/${fileName}`;
+
+  // Create folder if it doesn't exist
+  if (!(await app.vault.adapter.exists(folder))) {
+    await app.vault.adapter.mkdir(folder);
+  }
+
+  const arrayBuffer = await file.arrayBuffer();
+  await app.vault.adapter.writeBinary(destPath, arrayBuffer);
+
+  return destPath;
 }
