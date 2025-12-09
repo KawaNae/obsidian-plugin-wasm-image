@@ -1,6 +1,6 @@
-import { App, Notice, setIcon } from "obsidian";
+import { App, Notice, setIcon, TFile } from "obsidian";
 import { ConverterSettings } from "../settings";
-import { saveImageAndInsert } from "../file-service";
+import { saveImageAndInsert, convertAndReplaceFile } from "../file-service";
 import { sizePredictionService } from "../prediction/size-predictor";
 
 import { isAnimatedGif } from "../utils/gif-check";
@@ -9,7 +9,7 @@ import { SettingsPanel } from "./components/settings-panel";
 import { PreviewArea } from "./components/preview-area";
 // import { PreviewArea } from "./components/preview-area"; // Removed as DropZone now handles preview
 
-export async function openImageConverterModal(app: App, baseSettings: ConverterSettings, initialFile: File | null = null): Promise<string | undefined> {
+export async function openImageConverterModal(app: App, baseSettings: ConverterSettings, initialFile: File | null = null, targetTFile: TFile | null = null): Promise<string | undefined> {
     // Clone settings
     const settings: ConverterSettings = { ...baseSettings };
 
@@ -198,7 +198,7 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
         // Let's make it full width for easy mobile tap.
 
         const convertBtn = document.createElement("button");
-        convertBtn.textContent = "Convert & Insert";
+        convertBtn.textContent = targetTFile ? "Convert" : "Convert & Insert";
         convertBtn.className = "wasm-image-btn mod-cta";
         convertBtn.style.width = "100%"; // Full width cta
         convertBtn.style.justifyContent = "center";
@@ -222,19 +222,40 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
 
                 const currentSettings = settingsPanel.getSettings();
 
-                const result = await saveImageAndInsert(
-                    app,
-                    selectedFile,
-                    settings,
-                    settingsPanel.quality,
-                    settingsPanel.enableResize,
-                    settingsPanel.maxWidth,
-                    settingsPanel.maxHeight,
-                    settingsPanel.enableGrayscale,
-                    settingsPanel.converterType
-                );
-                const fileName = result.path.split("/").pop()!;
-                const markdownLink = `![[${fileName}]]`;
+                let result;
+                let markdownLink;
+
+                if (targetTFile) {
+                    // Replace mode (Context Menu)
+                    result = await convertAndReplaceFile(
+                        app,
+                        targetTFile,
+                        selectedFile,
+                        currentSettings,
+                        settingsPanel.quality,
+                        settingsPanel.enableResize,
+                        settingsPanel.maxWidth,
+                        settingsPanel.maxHeight,
+                        settingsPanel.enableGrayscale,
+                        settingsPanel.converterType
+                    );
+                    new Notice(`✅ Image replaced: ${result.path}`);
+                    markdownLink = `![[${result.path}]]`; // Provide updated link
+                } else {
+                    // Insert mode (Drag & Drop / Command)
+                    result = await saveImageAndInsert(
+                        app,
+                        selectedFile,
+                        currentSettings,
+                        settingsPanel.quality,
+                        settingsPanel.enableResize,
+                        settingsPanel.maxWidth,
+                        settingsPanel.maxHeight,
+                        settingsPanel.enableGrayscale,
+                        settingsPanel.converterType
+                    );
+                    markdownLink = `![[${result.path}]]`;
+                }
 
                 cleanupAndResolve(markdownLink);
 

@@ -79,7 +79,7 @@ export default class WasmImageConverterPlugin extends Plugin {
                     type: 'image/' + (file.extension === 'jpg' ? 'jpeg' : file.extension)
                   });
 
-                  const link = await openImageConverterModal(this.app, this.settings, imageFile);
+                  const link = await openImageConverterModal(this.app, this.settings, imageFile, file);
 
                   if (link) {
                     new Notice("✅ Image converted successfully");

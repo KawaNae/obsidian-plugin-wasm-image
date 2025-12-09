@@ -1,4 +1,4 @@
-import { App } from "obsidian";
+import { App, TFile } from "obsidian";
 import { ConverterSettings, ConverterType } from "./settings";
 import { convertImageToWebP, ImageProcessingOptions } from "./converters/webp-converter";
 
@@ -100,4 +100,82 @@ export async function saveOriginalFile(app: App, file: File, folder: string): Pr
   await app.vault.adapter.writeBinary(destPath, arrayBuffer);
 
   return destPath;
+}
+
+/**
+ * Converts the file and REPLACES the original TFile with the converted content.
+ * Also renames the file to match the new extension and timestamp convention, updating links.
+ */
+export async function convertAndReplaceFile(
+  app: App,
+  targetFile: TFile,
+  file: File, // Source content
+  settings: ConverterSettings,
+  quality: number,
+  enableResize: boolean,
+  maxWidth: number,
+  maxHeight: number,
+  enableGrayscale: boolean,
+  converterType: ConverterType
+): Promise<ConversionResult> {
+  const folder = settings.attachmentFolder;
+
+  const processingOptions: ImageProcessingOptions = createProcessingOptions(settings, {
+    quality,
+    enableResize,
+    maxWidth,
+    maxHeight,
+    enableGrayscale
+  });
+
+  // Convert
+  let convertedBlob: Blob;
+  let fileExtension: string;
+
+  switch (converterType) {
+    case ConverterType.WASM_WEBP:
+    default:
+      convertedBlob = await convertImageToWebP(file, processingOptions);
+      fileExtension = "webp";
+      break;
+  }
+
+  // Overwrite and rename
+  return replaceFileContentAndPath(app, targetFile, convertedBlob, folder, fileExtension);
+}
+
+/**
+ * Replaces the content of a TFile with a Blob, and renames/moves it to a new location.
+ * This handles the filesystem side of "converting" an existing file.
+ */
+export async function replaceFileContentAndPath(
+  app: App,
+  targetFile: TFile,
+  newContent: Blob,
+  folder: string,
+  newExtension: string
+): Promise<ConversionResult> {
+  const originalSize = targetFile.stat.size;
+
+  // Overwrite content
+  const arrayBuffer = await newContent.arrayBuffer();
+  await app.vault.modifyBinary(targetFile, arrayBuffer);
+
+  // Generate new path
+  const fileName = generateFileName(newExtension, newContent.size);
+  const destPath = `${folder}/${fileName}`;
+
+  // Ensure folder exists
+  if (!(await app.vault.adapter.exists(folder))) {
+    await app.vault.adapter.mkdir(folder);
+  }
+
+  // Rename/Move file (triggers link updates)
+  await app.fileManager.renameFile(targetFile, destPath);
+
+  return {
+    path: destPath,
+    originalSize: originalSize,
+    convertedSize: newContent.size
+  };
 }
