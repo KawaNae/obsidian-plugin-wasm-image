@@ -31,17 +31,18 @@ Obsidian用の高速画像変換プラグインです。WebAssembly (WASM) を�
 ## 📥 インストール方法
 
 ### 手動インストール
-1. [Releases ページ](https://github.com/KawaNae/obsidian-plugin-wasm-image/releases)にアクセス
-2. 最新リリースから以下のファイルをダウンロード:
-   - `main.js`
-   - `manifest.json`
-3. Vaultの `.obsidian/plugins/` フォルダ内に `obsidian-wasm-image` フォルダを作成
-4. ダウンロードしたファイルを配置
-5. Obsidian を再起動し、設定 → コミュニティプラグインでプラグインを有効化
+1. [Releases ページ](https://github.com/KawaNae/Obsidian-wasm-image-converter/releases)にアクセス
+2. 最新のリリースから `main.js`, `manifest.json`, `styles.css` をダウンロード
+3. Vaultの `.obsidian/plugins/` ディレクトリに `obsidian-wasm-image` というフォルダを作成
+4. ダウンロードしたファイルをそのフォルダに移動
+5. Obsidianを再読み込み
 
-### BRAT インストール（推奨）
-BRAT (Beta Reviewer's Auto-update Tool) をお使いの場合:
-1. このリポジトリを追加: `https://github.com/KawaNae/obsidian-plugin-wasm-image`
+### BRAT (Beta Reviewers Auto-update Tool) を使用
+
+1. [BRAT plugin](https://github.com/TfTHacker/obsidian42-brat) をインストール
+2. BRATの設定を開く
+3. "Add Beta plugin" をクリック
+4. このリポジトリを追加: `https://github.com/KawaNae/Obsidian-wasm-image-converter`
 2. BRAT が自動的にプラグインをダウンロード・インストール
 
 ## 🎮 使用方法
