@@ -59,6 +59,43 @@ export default class WasmImageConverterPlugin extends Plugin {
         await this.runBatchConvert();
       }
     });
+
+    // File menu event
+    this.registerEvent(
+      this.app.workspace.on("file-menu", (menu, file) => {
+        if (!(file instanceof TFile)) return;
+
+        const supportedExtensions = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'webp'];
+        if (supportedExtensions.includes(file.extension.toLowerCase())) {
+          menu.addItem((item) => {
+            item
+              .setTitle("Convert to ...")
+              .setIcon("image-file")
+              .onClick(async () => {
+                try {
+                  const arrayBuffer = await this.app.vault.readBinary(file);
+                  // Create a File object from the TFile content
+                  const imageFile = new File([arrayBuffer], file.name, {
+                    type: 'image/' + (file.extension === 'jpg' ? 'jpeg' : file.extension)
+                  });
+
+                  const link = await openImageConverterModal(this.app, this.settings, imageFile);
+
+                  if (link) {
+                    new Notice("✅ Image converted successfully");
+                    // Copy link to clipboard since we might not have an active editor
+                    await navigator.clipboard.writeText(link);
+                    new Notice("📋 Link copied to clipboard");
+                  }
+                } catch (e) {
+                  console.error("Conversion failed:", e);
+                  new Notice("❌ Failed to load image for conversion");
+                }
+              });
+          });
+        }
+      })
+    );
   }
 
   async onunload() {

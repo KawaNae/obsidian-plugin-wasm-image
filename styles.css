@@ -13,32 +13,36 @@
     margin-bottom: 15px;
 }
 
-/* Content Layout */
+/* Content Layout - Vertical Stack */
 .wasm-image-content {
-    display: flex;
-    gap: 30px;
+    /* display: flex;  <-- removed */
+    /* gap: 30px;      <-- removed */
     margin-bottom: 20px;
-    flex-wrap: nowrap;
-}
-
-/* Left Column */
-.wasm-image-left-col {
-    flex: 1;
-    min-width: 200px;
+    /* flex-wrap: nowrap; <-- removed */
 }
 
 /* Drop Zone */
 .wasm-image-drop-zone {
     border: 2px dashed var(--background-modifier-border);
     border-radius: 8px;
-    padding: 40px;
+    padding: 20px;
+    /* Reduced padding */
     text-align: center;
     cursor: pointer;
     transition: border-color 0.3s ease;
-    min-height: 200px;
+    min-height: 150px;
+    /* Reduced specific height */
+    max-height: 40vh;
+    /* Limit height for mobile */
     display: flex;
     flex-direction: column;
     justify-content: center;
+    align-items: center;
+    /* Center image */
+    margin-top: 15px;
+    /* Add spacing from settings */
+    overflow: hidden;
+    /* For image preview */
 }
 
 .wasm-image-drop-zone:hover,
@@ -75,7 +79,7 @@
     display: flex;
     align-items: center;
     margin-bottom: 10px;
-    gap: 10px;
+    gap: 60px;
 }
 
 .wasm-image-setting-label {
@@ -86,14 +90,18 @@
 }
 
 .wasm-image-setting-control {
-    width: 120px;
+    flex: 1;
+    /* Allow expansion */
+    width: 100%;
     height: 28px;
     font-size: 14px;
     box-sizing: border-box;
 }
 
 .wasm-image-checkbox-container {
-    width: 120px;
+    flex: 1;
+    /* Allow expansion */
+    width: 100%;
     height: 28px;
     display: flex;
     align-items: center;
@@ -154,4 +162,45 @@
 .wasm-image-btn {
     font-size: 14px;
     padding: 8px 12px;
+}
+
+.wasm-image-drop-zone-buttons {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 5px;
+    /* flex-wrap: wrap; <-- REMOVED wrap to force split */
+    width: 100%;
+}
+
+.wasm-image-drop-btn {
+    font-size: 13px;
+    /* Slightly larger */
+    padding: 8px 10px;
+    flex: 1;
+    /* Split width equally */
+    justify-content: center;
+    align-items: center;
+    /* Vertical center */
+    text-align: center;
+    display: flex;
+    /* Flex for icon+text */
+    gap: 6px;
+}
+
+.wasm-image-btn-icon {
+    display: flex;
+    align-items: center;
+}
+
+.wasm-image-btn-icon svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Drop Zone Disabled State */
+.wasm-image-drop-zone.disabled {
+    /* opacity: 0.6; <-- Removed to keep image bright */
+    cursor: default;
+    border-style: solid;
+    background-color: var(--background-secondary);
 }

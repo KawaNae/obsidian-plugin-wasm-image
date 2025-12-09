@@ -15,7 +15,15 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
 
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "WASM Image Converter Settings" });
+    // Version info
+    const versionEl = containerEl.createDiv({
+      text: `v${this.plugin.manifest.version}`,
+      cls: "wasm-image-settings-version"
+    });
+    versionEl.style.textAlign = "right";
+    versionEl.style.color = "var(--text-muted)";
+    versionEl.style.marginBottom = "10px";
+    versionEl.style.fontSize = "0.8em";
 
     // ===== General Settings Section (Not saved in presets) =====
     containerEl.createEl("h3", { text: "General Settings" });
