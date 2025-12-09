@@ -2,3 +2,4 @@ node_modules
 .claude
 dist
 data.json
+main.js

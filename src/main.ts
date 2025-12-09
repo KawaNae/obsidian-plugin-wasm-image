@@ -1,4 +1,4 @@
-import { Notice, Plugin, Editor, Platform } from "obsidian";
+import { Notice, Plugin, Editor, Platform, MarkdownView, TFile, Modal } from "obsidian";
 import { ConverterSettings, DEFAULT_SETTINGS } from "./settings";
 import { openImageConverterModal } from "./image-converter-modal";
 import { WasmImageConverterSettingTab } from "./settings-tab";
@@ -31,7 +31,8 @@ export default class WasmImageConverterPlugin extends Plugin {
 
           const active = this.app.workspace.getActiveFile();
           if (active) {
-            const editor = this.app.workspace.activeLeaf?.view?.editor;
+            const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+            const editor = view?.editor;
             if (editor) {
               const cursor = editor.getCursor();
               editor.replaceRange(link, cursor);
@@ -48,6 +49,15 @@ export default class WasmImageConverterPlugin extends Plugin {
         }
       },
     });
+
+    // Batch convert command
+    this.addCommand({
+      id: "batch-convert-images",
+      name: "Batch Convert Images to WebP",
+      callback: async () => {
+        await this.runBatchConvert();
+      }
+    });
   }
 
   async onunload() {
@@ -62,6 +72,185 @@ export default class WasmImageConverterPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
+  // ===== Batch Convert =====
+
+  private async runBatchConvert() {
+    try {
+      // Find all target images
+      const allFiles = this.app.vault.getFiles();
+      const targetImages = allFiles.filter(file => this.isBatchConvertTarget(file));
+
+      if (targetImages.length === 0) {
+        new Notice('No images found for conversion');
+        return;
+      }
+
+      // Count by extension
+      const counts: Record<string, number> = {};
+      targetImages.forEach(file => {
+        const ext = file.extension.toLowerCase();
+        counts[ext] = (counts[ext] || 0) + 1;
+      });
+
+      // Create confirmation message
+      const countLines = Object.entries(counts)
+        .map(([ext, count]) => `  - ${count} × ${ext}`)
+        .join('\n');
+
+      const confirmed = await this.showBatchConvertConfirmation(
+        `Found ${targetImages.length} images to convert:\n${countLines}\n\nContinue?`
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      // Process images
+      let totalOriginalSize = 0;
+      let totalConvertedSize = 0;
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (let i = 0; i < targetImages.length; i++) {
+        const image = targetImages[i];
+        new Notice(`Converting ${i + 1}/${targetImages.length}: ${image.name}`);
+
+        try {
+          const result = await this.convertImage(image);
+          totalOriginalSize += result.originalSize;
+          totalConvertedSize += result.convertedSize;
+          successCount++;
+        } catch (error) {
+          console.error(`Failed to convert ${image.name}:`, error);
+          errorCount++;
+        }
+      }
+
+      // Show completion notice
+      const savedMB = ((totalOriginalSize - totalConvertedSize) / (1024 * 1024)).toFixed(2);
+      const ratio = totalOriginalSize > 0
+        ? (((totalOriginalSize - totalConvertedSize) / totalOriginalSize) * 100).toFixed(1)
+        : '0';
+
+      new Notice(
+        `✅ Batch conversion complete!\n` +
+        `Converted: ${successCount} images\n` +
+        `Failed: ${errorCount} images\n` +
+        `Total saved: ${savedMB} MB (${ratio}% reduction)`
+      );
+    } catch (error) {
+      console.error('Batch convert failed:', error);
+      new Notice('❌ Batch conversion failed');
+    }
+  }
+
+  private showBatchConvertConfirmation(message: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      const modal = new (class extends Modal {
+        constructor(app: any) {
+          super(app);
+        }
+
+        onOpen() {
+          const { contentEl } = this;
+          contentEl.empty();
+
+          contentEl.createEl('h3', { text: 'Batch Convert Images' });
+          contentEl.createEl('pre', { text: message });
+
+          const buttonContainer = contentEl.createDiv('modal-button-container');
+
+          const cancelButton = buttonContainer.createEl('button', { text: 'Cancel' });
+          cancelButton.onclick = () => {
+            this.close();
+            resolve(false);
+          };
+
+          const confirmButton = buttonContainer.createEl('button', {
+            text: 'Convert',
+            cls: 'mod-cta'
+          });
+          confirmButton.onclick = () => {
+            this.close();
+            resolve(true);
+          };
+        }
+
+        onClose() {
+          const { contentEl } = this;
+          contentEl.empty();
+        }
+      })(this.app);
+
+      modal.open();
+    });
+  }
+
+  private isBatchConvertTarget(file: TFile): boolean {
+    return this.settings.batchConvertExtensions.includes(file.extension.toLowerCase());
+  }
+
+  private async convertImage(imageFile: TFile): Promise<{ originalSize: number, convertedSize: number }> {
+    // Get the selected preset
+    const selectedPreset = this.settings.presets.find(
+      p => p.name === this.settings.autoConvertPreset
+    ) || this.settings.presets.find(p => p.name === "Default")
+      || this.settings.presets[0];
+
+    if (!selectedPreset) {
+      throw new Error('No preset found');
+    }
+
+    // Import conversion functions
+    const { convertImageToWebP } = await import('./converters/webp-converter');
+    const { createProcessingOptions } = await import('./file-service');
+
+    // Read the original file
+    const originalSize = imageFile.stat.size;
+    const arrayBuffer = await this.app.vault.readBinary(imageFile);
+    const blob = new Blob([arrayBuffer], { type: `image/${imageFile.extension}` });
+    const file = new File([blob], imageFile.name, { type: blob.type });
+
+    // Convert to WebP
+    const processingOptions = createProcessingOptions(this.settings, {
+      quality: selectedPreset.quality,
+      enableResize: selectedPreset.enableResize,
+      maxWidth: selectedPreset.maxWidth,
+      maxHeight: selectedPreset.maxHeight,
+      enableGrayscale: selectedPreset.enableGrayscale
+    });
+
+    const convertedBlob = await convertImageToWebP(file, processingOptions);
+    const convertedSize = convertedBlob.size;
+
+    // Overwrite original file with WebP data
+    const convertedArrayBuffer = await convertedBlob.arrayBuffer();
+    await this.app.vault.modifyBinary(imageFile, convertedArrayBuffer);
+
+    // Generate new path in attachment folder
+    const folder = selectedPreset.attachmentFolder;
+    const timestamp = (window as any).moment().format("YYYYMMDD[T]HHmmss");
+    const sizeKB = (convertedSize / 1024).toFixed(2);
+    const fileName = `IMG-${timestamp}-${sizeKB}.webp`;
+    const destPath = `${folder}/${fileName}`;
+
+    // Create folder if it doesn't exist
+    if (!(await this.app.vault.adapter.exists(folder))) {
+      await this.app.vault.adapter.mkdir(folder);
+    }
+
+    // Rename the file to new location
+    // This triggers Obsidian's automatic link update
+    await this.app.fileManager.renameFile(imageFile, destPath);
+
+    return {
+      originalSize,
+      convertedSize
+    };
+  }
+
+  // ===== Auto-Convert Events =====
+
   private registerAutoConvertEvents() {
     // Auto-convert disabled or mobile platform
     if (!this.settings.enableAutoConvert || Platform.isMobile) return;
@@ -74,7 +263,7 @@ export default class WasmImageConverterPlugin extends Plugin {
         }
 
         // Get the actual drop position from the mouse event
-        const pos = editor.posAtMouse(evt);
+        const pos = (editor as any).posAtMouse(evt);
         if (!pos) {
           console.warn("Could not determine drop position");
           return;
@@ -89,8 +278,8 @@ export default class WasmImageConverterPlugin extends Plugin {
 
         // Check if we should process these files
         const hasSupportedFiles = fileData.some(data => {
-          return data.type.startsWith('image/') && 
-            ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'].some(ext => 
+          return data.type.startsWith('image/') &&
+            ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'].some(ext =>
               data.name.toLowerCase().endsWith(`.${ext}`)
             );
         });
@@ -124,8 +313,8 @@ export default class WasmImageConverterPlugin extends Plugin {
         const hasSupportedItems = itemData.some(data =>
           data.kind === "file" &&
           data.file &&
-          data.type.startsWith('image/') && 
-          ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'].some(ext => 
+          data.type.startsWith('image/') &&
+          ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'].some(ext =>
             data.file!.name.toLowerCase().endsWith(`.${ext}`)
           )
         );
@@ -139,15 +328,15 @@ export default class WasmImageConverterPlugin extends Plugin {
   }
 
   private async handleAutoConvert(
-    fileData: { name: string; type: string; file: File }[], 
-    editor: Editor, 
+    fileData: { name: string; type: string; file: File }[],
+    editor: Editor,
     pos: any
   ) {
     // Filter supported image files
     const supportedFiles = fileData
       .filter(data => {
-        return data.type.startsWith('image/') && 
-          ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'].some(ext => 
+        return data.type.startsWith('image/') &&
+          ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'].some(ext =>
             data.name.toLowerCase().endsWith(`.${ext}`)
           );
       })
@@ -162,8 +351,8 @@ export default class WasmImageConverterPlugin extends Plugin {
     }
 
     // Get the selected preset for auto-conversion
-    const selectedPreset = this.settings.presets.find(p => p.name === this.settings.autoConvertPreset) 
-      || this.settings.presets.find(p => p.name === "Default") 
+    const selectedPreset = this.settings.presets.find(p => p.name === this.settings.autoConvertPreset)
+      || this.settings.presets.find(p => p.name === "Default")
       || this.settings.presets[0];
 
     if (!selectedPreset) {
@@ -209,17 +398,17 @@ export default class WasmImageConverterPlugin extends Plugin {
   }
 
   private async handleAutoPaste(
-    itemData: { kind: string; type: string; file: File | null }[], 
-    editor: Editor, 
+    itemData: { kind: string; type: string; file: File | null }[],
+    editor: Editor,
     cursor: any
   ) {
     // Filter supported image files
     const supportedFiles = itemData
-      .filter(data => 
+      .filter(data =>
         data.kind === "file" &&
         data.file &&
-        data.type.startsWith('image/') && 
-        ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'].some(ext => 
+        data.type.startsWith('image/') &&
+        ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'].some(ext =>
           data.file!.name.toLowerCase().endsWith(`.${ext}`)
         )
       )
@@ -235,8 +424,8 @@ export default class WasmImageConverterPlugin extends Plugin {
     }
 
     // Get the selected preset for auto-conversion
-    const selectedPreset = this.settings.presets.find(p => p.name === this.settings.autoConvertPreset) 
-      || this.settings.presets.find(p => p.name === "Default") 
+    const selectedPreset = this.settings.presets.find(p => p.name === this.settings.autoConvertPreset)
+      || this.settings.presets.find(p => p.name === "Default")
       || this.settings.presets[0];
 
     if (!selectedPreset) {
@@ -280,5 +469,114 @@ export default class WasmImageConverterPlugin extends Plugin {
       }
     }
   }
-}
 
+  // ===== Auto-Organize Images =====
+
+  setupAutoOrganizeImages() {
+    if (!this.settings.enableAutoOrganizeImages) {
+      console.log('[Auto-Organize] Disabled in settings');
+      return;
+    }
+
+    console.log('[Auto-Organize] Setting up image file watcher...');
+
+    this.registerEvent(
+      this.app.vault.on('create', async (file) => {
+        // Only process TFile objects
+        if (!(file instanceof TFile)) {
+          return;
+        }
+
+        // Check if this is a supported image file
+        if (!this.isSupportedImageFile(file)) {
+          return;
+        }
+
+        console.log('[Auto-Organize] New image detected:', file.path);
+
+        // Wait a bit to ensure the file is fully written
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        try {
+          await this.organizeImage(file);
+        } catch (error) {
+          console.error('[Auto-Organize] Failed to organize image:', error);
+          new Notice(`❌ Failed to organize ${file.name}`);
+        }
+      })
+    );
+
+    console.log('[Auto-Organize] Image file watcher registered');
+  }
+
+  private isSupportedImageFile(file: TFile): boolean {
+    const supportedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'];
+    return supportedExtensions.includes(file.extension.toLowerCase());
+  }
+
+  private async organizeImage(imageFile: TFile): Promise<void> {
+    console.log('[Auto-Organize] Starting organization for:', imageFile.name);
+
+    try {
+      // Get the selected preset
+      const selectedPreset = this.settings.presets.find(
+        p => p.name === this.settings.autoConvertPreset
+      ) || this.settings.presets.find(p => p.name === "Default")
+        || this.settings.presets[0];
+
+      if (!selectedPreset) {
+        console.warn('[Auto-Organize] No preset found');
+        return;
+      }
+
+      // Read the original file
+      const arrayBuffer = await this.app.vault.readBinary(imageFile);
+      const blob = new Blob([arrayBuffer], { type: `image/${imageFile.extension}` });
+      const file = new File([blob], imageFile.name, { type: blob.type });
+
+      // Convert to WebP
+      const settings = {
+        ...this.settings,
+        attachmentFolder: selectedPreset.attachmentFolder
+      };
+
+      const result = await saveImageAndInsert(
+        this.app,
+        file,
+        settings,
+        selectedPreset.quality,
+        selectedPreset.enableResize,
+        selectedPreset.maxWidth,
+        selectedPreset.maxHeight,
+        selectedPreset.enableGrayscale,
+        selectedPreset.converterType
+      );
+
+      console.log('[Auto-Organize] Conversion successful:', result.path);
+
+      // Get the converted file
+      const convertedFile = this.app.vault.getAbstractFileByPath(result.path);
+      if (!(convertedFile instanceof TFile)) {
+        throw new Error('Converted file not found');
+      }
+
+      // Rename the original file to match the converted file location
+      // This will trigger Obsidian's automatic link update
+      await this.app.fileManager.renameFile(convertedFile, imageFile.path);
+
+      console.log('[Auto-Organize] Replaced original file with converted file');
+
+      // Show success notification
+      const originalKB = (result.originalSize / 1024).toFixed(2);
+      const convertedKB = (result.convertedSize / 1024).toFixed(2);
+      const ratio = (((result.originalSize - result.convertedSize) / result.originalSize) * 100).toFixed(1);
+
+      new Notice(
+        `✅ Auto-organized: ${imageFile.name} → ${originalKB}KB → ${convertedKB}KB (${ratio}% compressed)`
+      );
+    } catch (error) {
+      console.error('[Auto-Organize] Failed to organize image:', error);
+      throw error;
+    }
+  }
+}

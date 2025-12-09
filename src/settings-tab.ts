@@ -19,8 +19,8 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
 
     // ===== General Settings Section (Not saved in presets) =====
     containerEl.createEl("h3", { text: "General Settings" });
-    
-    const generalDesc = containerEl.createEl("div", { 
+
+    const generalDesc = containerEl.createEl("div", {
       cls: "setting-item-description",
       text: "These settings apply globally and are not saved in presets."
     });
@@ -54,12 +54,12 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
         this.plugin.settings.presets.forEach((preset) => {
           dropdown.addOption(preset.name, preset.name);
         });
-        
+
         // Set current value, fallback to "Default" if preset doesn't exist
         const currentPreset = this.plugin.settings.autoConvertPreset;
         const presetExists = this.plugin.settings.presets.some(p => p.name === currentPreset);
         dropdown.setValue(presetExists ? currentPreset : "Default");
-        
+
         dropdown.onChange(async (value) => {
           this.plugin.settings.autoConvertPreset = value;
           await this.plugin.saveSettings();
@@ -67,10 +67,40 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
       });
 
 
+    new Setting(containerEl)
+      .setName("Batch convert target extensions")
+      .setDesc("Select which image extensions to convert when running batch conversion")
+      .setClass('batch-convert-extensions');
+
+    // Create checkboxes for each extension
+    const extensionsContainer = containerEl.createDiv('batch-convert-extensions-container');
+    const availableExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'];
+
+    availableExtensions.forEach(ext => {
+      new Setting(extensionsContainer)
+        .setName(ext.toUpperCase())
+        .addToggle(toggle => toggle
+          .setValue(this.plugin.settings.batchConvertExtensions.includes(ext))
+          .onChange(async (value) => {
+            if (value) {
+              // Add extension if not already present
+              if (!this.plugin.settings.batchConvertExtensions.includes(ext)) {
+                this.plugin.settings.batchConvertExtensions.push(ext);
+              }
+            } else {
+              // Remove extension
+              this.plugin.settings.batchConvertExtensions =
+                this.plugin.settings.batchConvertExtensions.filter(e => e !== ext);
+            }
+            await this.plugin.saveSettings();
+          }));
+    });
+
+
     // ===== Presets Section =====
     containerEl.createEl("h3", { text: "Conversion Presets" });
-    
-    const presetsDesc = containerEl.createEl("div", { 
+
+    const presetsDesc = containerEl.createEl("div", {
       cls: "setting-item-description",
       text: "Manage conversion presets that include: Attachment folder, Quality, Grayscale, Resize settings, and Maximum dimensions."
     });
@@ -80,8 +110,8 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
 
     // ===== Dangerous Settings Section =====
     containerEl.createEl("h3", { text: "Dangerous Settings" });
-    
-    const dangerDesc = containerEl.createEl("div", { 
+
+    const dangerDesc = containerEl.createEl("div", {
       cls: "setting-item-description",
       text: "These actions cannot be undone. Use with caution."
     });
@@ -106,7 +136,7 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
 
   private displayPresets(): void {
     const { containerEl } = this;
-    
+
     const presetsContainer = containerEl.createDiv("presets-container");
 
     new Setting(presetsContainer)
@@ -119,7 +149,7 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
         }));
 
     if (this.plugin.settings.presets.length === 0) {
-      presetsContainer.createEl("p", { 
+      presetsContainer.createEl("p", {
         cls: "setting-item-description",
         text: "No presets found. Click 'Make Preset' to create one."
       });
@@ -129,14 +159,14 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
     this.plugin.settings.presets.forEach((preset, index) => {
       const isDefault = preset.name === "Default";
       const converterLabel = CONVERTER_OPTIONS.find(opt => opt.value === preset.converterType)?.label || preset.converterType;
-      
+
       new Setting(presetsContainer)
         .setName(preset.name)
         .setDesc(`Converter: ${converterLabel}, ` +
-                `Quality: ${(preset.quality * 100).toFixed(0)}%, ` +
-                `${preset.enableResize ? `Max: ${preset.maxWidth}x${preset.maxHeight}` : "No resize"}, ` +
-                `${preset.enableGrayscale ? "Grayscale" : "Color"}, ` +
-                `Folder: "${preset.attachmentFolder}"`)
+          `Quality: ${(preset.quality * 100).toFixed(0)}%, ` +
+          `${preset.enableResize ? `Max: ${preset.maxWidth}x${preset.maxHeight}` : "No resize"}, ` +
+          `${preset.enableGrayscale ? "Grayscale" : "Color"}, ` +
+          `Folder: "${preset.attachmentFolder}"`)
         .addButton(button => button
           .setButtonText("Edit")
           .onClick(() => {
@@ -255,8 +285,8 @@ class PresetEditModal extends Modal {
     let quality = this.preset?.quality || 0.8;
     let maxWidth = this.preset?.maxWidth || 1920;
     let maxHeight = this.preset?.maxHeight || 1080;
-    let enableResize = this.preset?.enableResize || true;
-    let enableGrayscale = this.preset?.enableGrayscale || false;
+    let enableResize: boolean = this.preset?.enableResize ?? true;
+    let enableGrayscale: boolean = this.preset?.enableGrayscale ?? false;
     let attachmentFolder = this.preset?.attachmentFolder || "Attachments";
 
     const isDefault = this.preset?.name === "Default";

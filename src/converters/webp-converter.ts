@@ -34,15 +34,15 @@ export async function convertImageToWebP(
   enableGrayscale: boolean = false
 ): Promise<Blob> {
   // 引数の判定と正規化
-  const options: ImageProcessingOptions = typeof optionsOrQuality === 'object' 
-    ? optionsOrQuality 
+  const options: ImageProcessingOptions = typeof optionsOrQuality === 'object'
+    ? optionsOrQuality
     : {
-        quality: optionsOrQuality,
-        enableResize: enableResize!,
-        maxWidth: maxWidth!,
-        maxHeight: maxHeight!,
-        enableGrayscale: enableGrayscale
-      };
+      quality: optionsOrQuality,
+      enableResize: enableResize!,
+      maxWidth: maxWidth!,
+      maxHeight: maxHeight!,
+      enableGrayscale: enableGrayscale
+    };
 
   // 画像ロード（createImageBitmap → <img> フォールバック）
   const bmp = await (async () => {
@@ -95,7 +95,13 @@ export async function convertImageToWebP(
   const q = Math.max(0, Math.min(100, Math.round(options.quality <= 1 ? options.quality * 100 : options.quality)));
 
   // WASM エンコード（build.mjs により wasm は data:URL 埋め込み済み）
-  const encoded = await webpEncode({ data: rgba, width, height }, { quality: q });
+  // ImageData型の厳密な型チェックを回避するため、any型にキャスト
+  const imageData = {
+    data: rgba as Uint8Array,
+    width,
+    height
+  } as any;
+  const encoded = await webpEncode(imageData, { quality: q });
   const bytes = encoded instanceof Uint8Array ? encoded : new Uint8Array(encoded);
   return new Blob([bytes], { type: "image/webp" });
 }

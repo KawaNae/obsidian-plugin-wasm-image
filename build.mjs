@@ -64,10 +64,20 @@ const fixJsquash = {
   },
 };
 
+// 出力先ディレクトリ
+const outDir = "C:\\Obsidian\\Dev\\.obsidian\\plugins\\obsidian-wasm-image";
+const outFile = path.join(outDir, "main.js");
+
+// 出力ディレクトリが存在しない場合は作成
+if (!fs.existsSync(outDir)) {
+  fs.mkdirSync(outDir, { recursive: true });
+  console.log(`Created directory: ${outDir}`);
+}
+
 await esbuild.build({
   entryPoints: ["src/main.ts"],
   bundle: true,
-  outfile: "main.js",   // 単一ファイル
+  outfile: outFile,
   format: "cjs",
   platform: "browser",
   target: "es2020",
@@ -77,4 +87,10 @@ await esbuild.build({
   logLevel: "info",
 });
 
-console.log("built: main.js");
+console.log(`built: ${outFile}`);
+
+// manifest.json をコピー
+const manifestSrc = "manifest.json";
+const manifestDest = path.join(outDir, "manifest.json");
+fs.copyFileSync(manifestSrc, manifestDest);
+console.log(`copied: ${manifestDest}`);

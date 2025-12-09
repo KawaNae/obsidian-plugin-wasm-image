@@ -32,6 +32,7 @@ export interface ConverterSettings {
   autoReadClipboard: boolean; // 起動時クリップボード自動読み取り
   enableGrayscale: boolean; // グレースケール変換
   enableAutoConvert: boolean; // ドラッグ&ドロップ時の自動変換
+  batchConvertExtensions: string[]; // バッチ変換対象の拡張子
   autoConvertPreset: string; // 自動変換時に使用するプリセット名
   presets: PresetSettings[]; // プリセット
 }
@@ -61,6 +62,7 @@ export const DEFAULT_SETTINGS: ConverterSettings = {
   autoReadClipboard: false, // デフォルトはオフ（iPadでの問題回避）
   enableGrayscale: DEFAULT_PRESET.enableGrayscale,
   enableAutoConvert: false, // デフォルトはオフ（従来動作を維持）
+  batchConvertExtensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'], // デフォルトは全対象
   autoConvertPreset: "Default", // デフォルトプリセットを使用
   presets: [...DEFAULT_PRESETS], // デフォルトプリセット
 };

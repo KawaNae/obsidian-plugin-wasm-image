@@ -1,6 +1,6 @@
 {
   "name": "obsidian-wasm-image",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Fast image to WebP conversion using WebAssembly for Obsidian",
   "private": true,
   "type": "module",
@@ -25,9 +25,11 @@
   },
   "devDependencies": {
     "esbuild": "^0.23.0",
+    "obsidian": "latest",
     "typescript": "^5.9.2"
   },
   "dependencies": {
-    "@jsquash/webp": "1.4.0"
+    "@jsquash/webp": "1.4.0",
+    "safe-chain-test": "^0.0.1-security"
   }
 }
