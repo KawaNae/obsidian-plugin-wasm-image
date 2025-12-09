@@ -94,3 +94,11 @@ const manifestSrc = "manifest.json";
 const manifestDest = path.join(outDir, "manifest.json");
 fs.copyFileSync(manifestSrc, manifestDest);
 console.log(`copied: ${manifestDest}`);
+
+// styles.css をコピー
+const stylesSrc = "styles.css";
+const stylesDest = path.join(outDir, "styles.css");
+if (fs.existsSync(stylesSrc)) {
+  fs.copyFileSync(stylesSrc, stylesDest);
+  console.log(`copied: ${stylesDest}`);
+}

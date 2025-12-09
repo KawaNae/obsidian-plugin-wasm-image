@@ -1,0 +1,157 @@
+/* Modal Container */
+.wasm-image-modal {
+    width: min(500px, 90vw);
+    max-width: 500px;
+    max-height: 90vh;
+    padding: 20px;
+    /* Box shadow and others are handled by Obsidian's modal base usually, but we can enforce if needed */
+}
+
+/* Title */
+.wasm-image-modal-title {
+    margin-top: 0;
+    margin-bottom: 15px;
+}
+
+/* Content Layout */
+.wasm-image-content {
+    display: flex;
+    gap: 30px;
+    margin-bottom: 20px;
+    flex-wrap: nowrap;
+}
+
+/* Left Column */
+.wasm-image-left-col {
+    flex: 1;
+    min-width: 200px;
+}
+
+/* Drop Zone */
+.wasm-image-drop-zone {
+    border: 2px dashed var(--background-modifier-border);
+    border-radius: 8px;
+    padding: 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.3s ease;
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.wasm-image-drop-zone:hover,
+.wasm-image-drop-zone.drag-over {
+    border-color: var(--interactive-accent);
+}
+
+.wasm-image-drop-zone-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+}
+
+.wasm-image-drop-zone-subtext {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 5px;
+}
+
+/* Clipboard Button */
+.wasm-image-clipboard-btn {
+    font-size: 14px;
+    padding: 8px 12px;
+    margin-top: 10px;
+    width: 100%;
+}
+
+/* Right Column */
+.wasm-image-right-col {
+    flex-shrink: 0;
+}
+
+/* Settings Rows */
+.wasm-image-setting-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    gap: 10px;
+}
+
+.wasm-image-setting-label {
+    font-size: 14px;
+    min-width: 80px;
+    flex-shrink: 0;
+    color: var(--text-muted);
+}
+
+.wasm-image-setting-control {
+    width: 120px;
+    height: 28px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.wasm-image-checkbox-container {
+    width: 120px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+}
+
+.wasm-image-checkbox-label {
+    cursor: pointer;
+    font-size: 14px;
+    min-width: 80px;
+    flex-shrink: 0;
+    color: var(--text-muted);
+    user-select: none;
+}
+
+/* Info Texts */
+.wasm-image-folder-info {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.wasm-image-prediction-info {
+    font-size: 12px;
+    color: var(--text-accent);
+    margin-top: 5px;
+    display: none;
+}
+
+.wasm-image-prediction-info.visible {
+    display: block;
+}
+
+/* Preview Area */
+.wasm-image-preview {
+    margin-bottom: 15px;
+}
+
+.wasm-image-preview-img {
+    max-width: 100%;
+    max-height: 200px;
+    object-fit: contain;
+}
+
+.wasm-image-preview-info {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 5px;
+}
+
+/* Button Row */
+.wasm-image-btn-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+.wasm-image-btn {
+    font-size: 14px;
+    padding: 8px 12px;
+}

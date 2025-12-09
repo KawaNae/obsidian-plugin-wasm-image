@@ -1,6 +1,6 @@
 import { Notice, Plugin, Editor, Platform, MarkdownView, TFile, Modal } from "obsidian";
 import { ConverterSettings, DEFAULT_SETTINGS } from "./settings";
-import { openImageConverterModal } from "./image-converter-modal";
+import { openImageConverterModal } from "./ui/image-converter-modal";
 import { WasmImageConverterSettingTab } from "./settings-tab";
 import { sizePredictionService } from "./prediction/size-predictor";
 import { WebPSizePredictor } from "./prediction/webp-predictor";

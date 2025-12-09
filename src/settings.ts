@@ -34,6 +34,7 @@ export interface ConverterSettings {
   enableAutoConvert: boolean; // ドラッグ&ドロップ時の自動変換
   batchConvertExtensions: string[]; // バッチ変換対象の拡張子
   autoConvertPreset: string; // 自動変換時に使用するプリセット名
+  enableAutoOrganizeImages: boolean; // 新規画像の自動整理
   presets: PresetSettings[]; // プリセット
 }
 
@@ -64,5 +65,6 @@ export const DEFAULT_SETTINGS: ConverterSettings = {
   enableAutoConvert: false, // デフォルトはオフ（従来動作を維持）
   batchConvertExtensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'], // デフォルトは全対象
   autoConvertPreset: "Default", // デフォルトプリセットを使用
+  enableAutoOrganizeImages: false, // デフォルトはオフ
   presets: [...DEFAULT_PRESETS], // デフォルトプリセット
 };
