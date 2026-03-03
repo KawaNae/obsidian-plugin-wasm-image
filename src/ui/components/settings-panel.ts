@@ -8,6 +8,7 @@ export class SettingsPanel {
     private presetSelect!: HTMLSelectElement;
     private converterSelect!: HTMLSelectElement;
     private qualityInput!: HTMLInputElement;
+    private qualityRow!: HTMLDivElement;
     private resizeCheckbox!: HTMLInputElement;
     private maxWInput!: HTMLInputElement;
     private maxHInput!: HTMLInputElement;
@@ -44,6 +45,7 @@ export class SettingsPanel {
         // Converter
         this.converterSelect = this.createSelect("Converter:", (val) => {
             this.settings.converterType = val as ConverterType;
+            this.updateQualityState();
             this.presetSelect.value = "default";
             this.notifyChange();
         });
@@ -55,12 +57,14 @@ export class SettingsPanel {
         });
         this.converterSelect.value = this.settings.converterType;
 
-        // Quality
+        // Quality (disabled for PNG since it's lossless)
         this.qualityInput = this.createNumberInput("Quality:", 0.1, 1.0, 0.1, this.settings.quality, (val) => {
             this.settings.quality = val;
             this.presetSelect.value = "default";
             this.notifyChange();
         });
+        // Store the quality row for toggling visibility
+        this.qualityRow = this.qualityInput.parentElement as HTMLDivElement;
 
         // Grayscale
         this.grayscaleCheckbox = this.createCheckbox("Grayscale", this.settings.enableGrayscale, (checked) => {
@@ -97,6 +101,18 @@ export class SettingsPanel {
         this.folderInfo.className = "wasm-image-folder-info";
         this.folderInfo.textContent = `Save to: ${this.settings.attachmentFolder}/`;
         this.element.appendChild(this.folderInfo);
+
+        // Set initial quality state based on converter type
+        this.updateQualityState();
+    }
+
+    /** Disable quality input for lossless formats (PNG) */
+    private updateQualityState() {
+        const isLossless = this.settings.converterType === ConverterType.CANVAS_PNG;
+        this.qualityInput.disabled = isLossless;
+        if (this.qualityRow) {
+            this.qualityRow.style.opacity = isLossless ? "0.5" : "1";
+        }
     }
 
     private createSelect(label: string, onChange: (val: string) => void): HTMLSelectElement {
@@ -199,6 +215,7 @@ export class SettingsPanel {
         this.resizeCheckbox.checked = preset.enableResize;
         this.grayscaleCheckbox.checked = preset.enableGrayscale;
         this.folderInfo.textContent = `Save to: ${preset.attachmentFolder}/`;
+        this.updateQualityState();
     }
 
     private notifyChange() {

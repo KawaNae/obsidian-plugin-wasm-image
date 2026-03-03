@@ -1,8 +1,9 @@
 export enum ConverterType {
   WASM_WEBP = "wasm-webp",
+  CANVAS_PNG = "canvas-png",
+  CANVAS_JPEG = "canvas-jpeg",
   // Future converters can be added here
   // WASM_AVIF = "wasm-avif",
-  // SHARP_WEBP = "sharp-webp",
 }
 
 export interface PresetSettings {
@@ -18,9 +19,21 @@ export interface PresetSettings {
 
 export const CONVERTER_OPTIONS = [
   { value: ConverterType.WASM_WEBP, label: "WASM WebP", description: "WebP conversion using WebAssembly" },
+  { value: ConverterType.CANVAS_JPEG, label: "JPEG", description: "JPEG conversion using Canvas API" },
+  { value: ConverterType.CANVAS_PNG, label: "PNG", description: "Lossless PNG conversion using Canvas API" },
   // Future options:
   // { value: ConverterType.WASM_AVIF, label: "WASM AVIF", description: "AVIF conversion using WebAssembly" },
 ];
+
+/** Returns the file extension for a given converter type */
+export function getExtensionForConverter(converterType: ConverterType): string {
+  switch (converterType) {
+    case ConverterType.CANVAS_PNG: return "png";
+    case ConverterType.CANVAS_JPEG: return "jpg";
+    case ConverterType.WASM_WEBP:
+    default: return "webp";
+  }
+}
 
 export interface ConverterSettings {
   converterType: ConverterType; // 現在選択されているコンバーター

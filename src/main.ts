@@ -1,9 +1,10 @@
 import { Notice, Plugin, Editor, Platform, MarkdownView, TFile, Modal } from "obsidian";
-import { ConverterSettings, DEFAULT_SETTINGS } from "./settings";
+import { ConverterSettings, ConverterType, DEFAULT_SETTINGS, getExtensionForConverter } from "./settings";
 import { openImageConverterModal } from "./ui/image-converter-modal";
 import { WasmImageConverterSettingTab } from "./settings-tab";
 import { sizePredictionService } from "./prediction/size-predictor";
 import { WebPSizePredictor } from "./prediction/webp-predictor";
+import { JPEGSizePredictor, PNGSizePredictor } from "./prediction/canvas-predictor";
 import { saveImageAndInsert, saveOriginalFile } from "./file-service";
 import { isAnimatedGif } from "./utils/gif-check";
 
@@ -15,6 +16,8 @@ export default class WasmImageConverterPlugin extends Plugin {
 
     // Initialize size prediction service
     sizePredictionService.registerPredictor(new WebPSizePredictor());
+    sizePredictionService.registerPredictor(new JPEGSizePredictor());
+    sizePredictionService.registerPredictor(new PNGSizePredictor());
 
     this.addSettingTab(new WasmImageConverterSettingTab(this.app, this));
 
@@ -42,7 +45,7 @@ export default class WasmImageConverterPlugin extends Plugin {
               await this.app.vault.modify(active, content + "\n" + link);
             }
           } else {
-            new Notice("📋 WebP link: " + link);
+            new Notice("📋 Image link: " + link);
           }
         } catch (e) {
           console.error(e);
@@ -54,7 +57,7 @@ export default class WasmImageConverterPlugin extends Plugin {
     // Batch convert command
     this.addCommand({
       id: "batch-convert-images",
-      name: "Batch Convert Images to WebP",
+      name: "Batch Convert Images",
       callback: async () => {
         await this.runBatchConvert();
       }
@@ -68,8 +71,9 @@ export default class WasmImageConverterPlugin extends Plugin {
         const supportedExtensions = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'webp'];
         if (supportedExtensions.includes(file.extension.toLowerCase())) {
           menu.addItem((item) => {
+            const ext = getExtensionForConverter(this.settings.converterType).toUpperCase();
             item
-              .setTitle("Convert to ...")
+              .setTitle(`Convert to ${ext}...`)
               .setIcon("image-file")
               .onClick(async () => {
                 try {
@@ -255,6 +259,7 @@ export default class WasmImageConverterPlugin extends Plugin {
 
     // Import conversion functions
     const { convertImageToWebP } = await import('./converters/webp-converter');
+    const { convertImageWithCanvas } = await import('./converters/canvas-converter');
     const { createProcessingOptions } = await import('./file-service');
 
     // Read the original file
@@ -263,7 +268,7 @@ export default class WasmImageConverterPlugin extends Plugin {
     const blob = new Blob([arrayBuffer], { type: `image/${imageFile.extension}` });
     const file = new File([blob], imageFile.name, { type: blob.type });
 
-    // Convert to WebP
+    // Convert using the preset's converter type
     const processingOptions = createProcessingOptions(this.settings, {
       quality: selectedPreset.quality,
       enableResize: selectedPreset.enableResize,
@@ -272,18 +277,34 @@ export default class WasmImageConverterPlugin extends Plugin {
       enableGrayscale: selectedPreset.enableGrayscale
     });
 
-    const convertedBlob = await convertImageToWebP(file, processingOptions);
-    const convertedSize = convertedBlob.size;
+    let convertedBlob: Blob;
+    const converterType = selectedPreset.converterType;
 
-    // Overwrite original file with WebP data
+    switch (converterType) {
+      case ConverterType.CANVAS_PNG:
+        convertedBlob = await convertImageWithCanvas(file, "image/png", processingOptions);
+        break;
+      case ConverterType.CANVAS_JPEG:
+        convertedBlob = await convertImageWithCanvas(file, "image/jpeg", processingOptions);
+        break;
+      case ConverterType.WASM_WEBP:
+      default:
+        convertedBlob = await convertImageToWebP(file, processingOptions);
+        break;
+    }
+
+    const convertedSize = convertedBlob.size;
+    const fileExtension = getExtensionForConverter(converterType);
+
+    // Overwrite original file with converted data
     const convertedArrayBuffer = await convertedBlob.arrayBuffer();
     await this.app.vault.modifyBinary(imageFile, convertedArrayBuffer);
 
     // Generate new path in attachment folder
     const folder = selectedPreset.attachmentFolder;
-    const timestamp = (window as any).moment().format("YYYYMMDD[T]HHmmss");
+    const timestamp = (window as any).moment().format("YYYYMMDD[T]HHmmssSSS");
     const sizeKB = (convertedSize / 1024).toFixed(2);
-    const fileName = `IMG-${timestamp}-${sizeKB}.webp`;
+    const fileName = `IMG-${timestamp}-${sizeKB}.${fileExtension}`;
     const destPath = `${folder}/${fileName}`;
 
     // Create folder if it doesn't exist

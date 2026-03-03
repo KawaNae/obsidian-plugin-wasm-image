@@ -7,7 +7,6 @@ import { isAnimatedGif } from "../utils/gif-check";
 import { DropZone } from "./components/drop-zone";
 import { SettingsPanel } from "./components/settings-panel";
 import { PreviewArea } from "./components/preview-area";
-// import { PreviewArea } from "./components/preview-area"; // Removed as DropZone now handles preview
 
 export async function openImageConverterModal(app: App, baseSettings: ConverterSettings, initialFile: File | null = null, targetTFile: TFile | null = null): Promise<string | undefined> {
     // Clone settings
@@ -25,9 +24,9 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
             zIndex: "9999",
             background: "var(--background-primary)",
             border: "1px solid var(--background-modifier-border)",
-            borderRadius: "12px", // Slightly more rounded
+            borderRadius: "12px",
             boxShadow: "0 20px 50px rgba(0,0,0,0.5)",
-            width: "min(450px, 95vw)", // 450px or 95% of viewport
+            width: "min(450px, 95vw)",
             maxHeight: "90vh",
             overflowY: "auto",
             display: "flex",
@@ -44,7 +43,7 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
         // Title
         const title = document.createElement("h3");
         title.className = "wasm-image-modal-title";
-        title.textContent = "WASM Image Converter";
+        title.textContent = "Image Converter";
         title.style.margin = "0";
 
         // Close Button
@@ -53,80 +52,120 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
         closeBtn.style.cursor = "pointer";
         closeBtn.style.color = "var(--text-muted)";
         closeBtn.style.display = "flex";
-        closeBtn.onclick = () => cleanupAndResolve(undefined); // Close action
+        closeBtn.onclick = () => cleanupAndResolve(undefined);
 
         header.appendChild(title);
         header.appendChild(closeBtn);
         modal.appendChild(header);
 
         // Components
-        let selectedFile: File | null = null;
+        let selectedFiles: File[] = [];
 
         // Info Div (for prediction and file size)
         const infoDiv = document.createElement("div");
         infoDiv.className = "wasm-image-preview-info";
-        // Style it to be centered or prominent
         infoDiv.style.marginTop = "10px";
         infoDiv.style.marginBottom = "10px";
         infoDiv.style.textAlign = "center";
 
+        // Progress bar container (hidden by default)
+        const progressContainer = document.createElement("div");
+        progressContainer.className = "wasm-image-progress-container";
+        progressContainer.style.display = "none";
+
+        const progressBar = document.createElement("div");
+        progressBar.className = "wasm-image-progress-bar";
+        const progressFill = document.createElement("div");
+        progressFill.className = "wasm-image-progress-fill";
+        progressBar.appendChild(progressFill);
+
+        const progressText = document.createElement("div");
+        progressText.className = "wasm-image-progress-text";
+
+        progressContainer.appendChild(progressBar);
+        progressContainer.appendChild(progressText);
+
         const updatePrediction = async () => {
-            if (!selectedFile) {
+            if (selectedFiles.length === 0) {
                 infoDiv.textContent = "";
                 return;
             }
 
-            const originalKB = (selectedFile.size / 1024).toFixed(1);
-            let infoText = `${selectedFile.name}: ${originalKB}kB`;
+            if (selectedFiles.length === 1) {
+                // Single file: show detailed info
+                const file = selectedFiles[0];
+                const originalKB = (file.size / 1024).toFixed(1);
+                let infoText = `${file.name}: ${originalKB}kB`;
 
-            try {
-                const currentSettings = settingsPanel.getSettings();
+                try {
+                    const predictionResult = await sizePredictionService.predictSize(file, {
+                        converterType: settingsPanel.converterType,
+                        quality: settingsPanel.quality,
+                        enableGrayscale: settingsPanel.enableGrayscale,
+                        enableResize: settingsPanel.enableResize,
+                        maxWidth: settingsPanel.maxWidth,
+                        maxHeight: settingsPanel.maxHeight
+                    });
 
-                const predictionResult = await sizePredictionService.predictSize(selectedFile, {
-                    converterType: settingsPanel.converterType,
-                    quality: settingsPanel.quality,
-                    enableGrayscale: settingsPanel.enableGrayscale,
-                    enableResize: settingsPanel.enableResize,
-                    maxWidth: settingsPanel.maxWidth,
-                    maxHeight: settingsPanel.maxHeight
-                });
-
-                if (predictionResult) {
-                    const predictedKB = (predictionResult.predictedSize / 1024).toFixed(1);
-                    const compressionRatio = ((selectedFile.size - predictionResult.predictedSize) / selectedFile.size * 100).toFixed(0);
-
-                    infoText += ` → Expected: ${predictedKB}kB (-${compressionRatio}%)`;
+                    if (predictionResult) {
+                        const predictedKB = (predictionResult.predictedSize / 1024).toFixed(1);
+                        const compressionRatio = ((file.size - predictionResult.predictedSize) / file.size * 100).toFixed(0);
+                        infoText += ` \u2192 Expected: ${predictedKB}kB (-${compressionRatio}%)`;
+                    }
+                } catch (error) {
+                    console.warn('Size prediction failed:', error);
                 }
-            } catch (error) {
-                console.warn('Size prediction failed:', error);
-            }
 
-            infoDiv.innerHTML = infoText;
-            // Also color accent part
-            const ratioMatch = infoText.match(/Expected.*$/);
-            if (ratioMatch) {
-                infoDiv.innerHTML = infoText.replace(ratioMatch[0], `<span style="color: var(--text-accent);">${ratioMatch[0]}</span>`);
+                infoDiv.innerHTML = infoText;
+                const ratioMatch = infoText.match(/Expected.*$/);
+                if (ratioMatch) {
+                    infoDiv.innerHTML = infoText.replace(ratioMatch[0], `<span style="color: var(--text-accent);">${ratioMatch[0]}</span>`);
+                }
+            } else {
+                // Multiple files: show aggregate info
+                const totalSizeKB = (selectedFiles.reduce((sum, f) => sum + f.size, 0) / 1024).toFixed(1);
+                infoDiv.textContent = `${selectedFiles.length} images selected (${totalSizeKB}kB total)`;
             }
         };
 
-        const handleFileSelect = async (file: File) => {
-            if (!file || !file.type.startsWith("image/")) {
-                new Notice("❌ Please select a valid image file");
+        const updateConvertButton = () => {
+            if (selectedFiles.length === 0) {
+                convertBtn.disabled = true;
+                convertBtn.textContent = targetTFile ? "Convert" : "Convert & Insert";
+            } else if (targetTFile) {
+                convertBtn.disabled = false;
+                convertBtn.textContent = "Convert";
+            } else if (selectedFiles.length === 1) {
+                convertBtn.disabled = false;
+                convertBtn.textContent = "Convert & Insert";
+            } else {
+                convertBtn.disabled = false;
+                convertBtn.textContent = `Convert & Insert (${selectedFiles.length} images)`;
+            }
+        };
+
+        const handleFilesSelect = async (files: File[]) => {
+            // Validate files
+            const validFiles = files.filter(f => f.type.startsWith("image/"));
+            if (validFiles.length === 0) {
+                new Notice("\u274c Please select valid image files");
                 return;
             }
 
-            if (file.type === 'image/gif' && await isAnimatedGif(file)) {
-                new Notice("⚠️ Animated GIF detected. Conversion will result in a static image (first frame only).");
+            // Check for animated GIFs
+            for (const file of validFiles) {
+                if (file.type === 'image/gif' && await isAnimatedGif(file)) {
+                    new Notice("\u26a0\ufe0f Animated GIF detected. Conversion will result in a static image (first frame only).");
+                    break;
+                }
             }
 
-            selectedFile = file;
-            convertBtn.disabled = false;
-
-            dropZone.showPreview(file);
+            selectedFiles = validFiles;
+            updateConvertButton();
             updatePrediction();
         };
 
-        const dropZone = new DropZone(handleFileSelect);
+        const dropZone = new DropZone(handleFilesSelect);
 
         // Source Buttons (Paste / Import)
         const sourceBtnRow = document.createElement("div");
@@ -138,15 +177,13 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
         pasteBtn.className = "wasm-image-btn wasm-image-drop-btn";
         pasteBtn.style.flex = "1";
         pasteBtn.onclick = () => dropZone.handleClipboardPaste();
-        // Icon + Text
         const pasteIcon = document.createElement("span");
         pasteIcon.className = "wasm-image-btn-icon";
-        setIcon(pasteIcon, "clipboard-paste"); // or 'paste'
+        setIcon(pasteIcon, "clipboard-paste");
         const pasteText = document.createElement("span");
         pasteText.textContent = " Paste from Clipboard";
         pasteBtn.appendChild(pasteIcon);
         pasteBtn.appendChild(pasteText);
-
 
         const importBtn = document.createElement("button");
         importBtn.className = "wasm-image-btn wasm-image-drop-btn";
@@ -154,7 +191,7 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
         importBtn.onclick = () => dropZone.triggerFileInput();
         const importIcon = document.createElement("span");
         importIcon.className = "wasm-image-btn-icon";
-        setIcon(importIcon, "download"); // Changed to download
+        setIcon(importIcon, "download");
         const importText = document.createElement("span");
         importText.textContent = " Import from system";
         importBtn.appendChild(importIcon);
@@ -169,43 +206,33 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
         });
 
         // ===== Layout Assembly (Vertical Stack) =====
-        // 1. Header (Title + Close) - Added above
-
-        // 2. Settings
         modal.appendChild(settingsPanel.getElement());
 
-        // 3. Source Buttons (Only if not in context menu mode)
         if (!initialFile) {
             modal.appendChild(sourceBtnRow);
         } else {
             dropZone.setDisabled(true);
         }
 
-        // 4. Drop Zone (Doubles as Preview, D&D only)
-        // Adjust drop zone top margin
         dropZone.getElement().style.marginTop = initialFile ? "15px" : "8px";
         modal.appendChild(dropZone.getElement());
 
-        // 5. Info
         modal.appendChild(infoDiv);
+        modal.appendChild(progressContainer);
 
-        // 6. Buttons
+        // Convert Button
         const btnRow = document.createElement("div");
         btnRow.className = "wasm-image-btn-row";
-        btnRow.style.justifyContent = "center"; // Center the single button (or right align)
-        // With no cancel button, maybe full width convert button? 
-        // User didn't specify, but "Convert & Insert" might look best full width or right aligned.
-        // Let's make it full width for easy mobile tap.
+        btnRow.style.justifyContent = "center";
 
         const convertBtn = document.createElement("button");
         convertBtn.textContent = targetTFile ? "Convert" : "Convert & Insert";
         convertBtn.className = "wasm-image-btn mod-cta";
-        convertBtn.style.width = "100%"; // Full width cta
+        convertBtn.style.width = "100%";
         convertBtn.style.justifyContent = "center";
         convertBtn.disabled = true;
 
         btnRow.appendChild(convertBtn);
-
         modal.appendChild(btnRow);
 
         // ===== Logic =====
@@ -215,22 +242,20 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
         }
 
         convertBtn.addEventListener("click", async () => {
-            if (!selectedFile) return;
+            if (selectedFiles.length === 0) return;
             try {
                 convertBtn.disabled = true;
-                convertBtn.textContent = "Converting...";
-
                 const currentSettings = settingsPanel.getSettings();
 
-                let result;
-                let markdownLink;
-
                 if (targetTFile) {
-                    // Replace mode (Context Menu)
-                    result = await convertAndReplaceFile(
+                    // Replace mode (Context Menu) - single file only
+                    const file = selectedFiles[0];
+                    convertBtn.textContent = "Converting...";
+
+                    const result = await convertAndReplaceFile(
                         app,
                         targetTFile,
-                        selectedFile,
+                        file,
                         currentSettings,
                         settingsPanel.quality,
                         settingsPanel.enableResize,
@@ -239,41 +264,107 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
                         settingsPanel.enableGrayscale,
                         settingsPanel.converterType
                     );
-                    new Notice(`✅ Image replaced: ${result.path}`);
-                    markdownLink = `![[${result.path}]]`; // Provide updated link
+
+                    new Notice(`\u2705 Image replaced: ${result.path}`);
+                    const markdownLink = `![[${result.path}]]`;
+
+                    cleanupAndResolve(markdownLink);
+
+                    const originalKB = (result.originalSize / 1024).toFixed(2);
+                    const convertedKB = (result.convertedSize / 1024).toFixed(2);
+                    const ratio = (((result.originalSize - result.convertedSize) / result.originalSize) * 100).toFixed(1);
+                    new Notice(`\u2705 Image converted: ${originalKB}KB \u2192 ${convertedKB}KB (${ratio}% compressed)`);
                 } else {
-                    // Insert mode (Drag & Drop / Command)
-                    result = await saveImageAndInsert(
-                        app,
-                        selectedFile,
-                        currentSettings,
-                        settingsPanel.quality,
-                        settingsPanel.enableResize,
-                        settingsPanel.maxWidth,
-                        settingsPanel.maxHeight,
-                        settingsPanel.enableGrayscale,
-                        settingsPanel.converterType
-                    );
-                    markdownLink = `![[${result.path}]]`;
+                    // Insert mode - supports multiple files
+                    const links: string[] = [];
+                    const errors: string[] = [];
+                    let totalOriginalSize = 0;
+                    let totalConvertedSize = 0;
+
+                    // Show progress for multiple files
+                    if (selectedFiles.length > 1) {
+                        progressContainer.style.display = "block";
+                    }
+
+                    for (let i = 0; i < selectedFiles.length; i++) {
+                        const file = selectedFiles[i];
+
+                        // Update progress
+                        if (selectedFiles.length > 1) {
+                            const pct = ((i) / selectedFiles.length) * 100;
+                            progressFill.style.width = `${pct}%`;
+                            progressText.textContent = `Converting ${i + 1}/${selectedFiles.length}: ${file.name}`;
+                        } else {
+                            convertBtn.textContent = "Converting...";
+                        }
+
+                        try {
+                            const result = await saveImageAndInsert(
+                                app,
+                                file,
+                                currentSettings,
+                                settingsPanel.quality,
+                                settingsPanel.enableResize,
+                                settingsPanel.maxWidth,
+                                settingsPanel.maxHeight,
+                                settingsPanel.enableGrayscale,
+                                settingsPanel.converterType
+                            );
+
+                            links.push(`![[${result.path}]]`);
+                            totalOriginalSize += result.originalSize;
+                            totalConvertedSize += result.convertedSize;
+                        } catch (error) {
+                            console.error(`Failed to convert ${file.name}:`, error);
+                            errors.push(file.name);
+                        }
+                    }
+
+                    // Complete progress
+                    if (selectedFiles.length > 1) {
+                        progressFill.style.width = "100%";
+                        progressText.textContent = "Done!";
+                    }
+
+                    if (links.length > 0) {
+                        const markdownLinks = links.join("\n");
+                        cleanupAndResolve(markdownLinks);
+
+                        const originalKB = (totalOriginalSize / 1024).toFixed(2);
+                        const convertedKB = (totalConvertedSize / 1024).toFixed(2);
+                        const ratio = totalOriginalSize > 0
+                            ? (((totalOriginalSize - totalConvertedSize) / totalOriginalSize) * 100).toFixed(1)
+                            : "0";
+
+                        if (selectedFiles.length === 1) {
+                            new Notice(`\u2705 Image converted: ${originalKB}KB \u2192 ${convertedKB}KB (${ratio}% compressed)`);
+                        } else {
+                            new Notice(`\u2705 ${links.length} images converted: ${originalKB}KB \u2192 ${convertedKB}KB (${ratio}% compressed)`);
+                        }
+
+                        if (errors.length > 0) {
+                            new Notice(`\u274c Failed to convert: ${errors.join(", ")}`);
+                        }
+                    } else {
+                        new Notice("\u274c All conversions failed");
+                        convertBtn.disabled = false;
+                        updateConvertButton();
+                        progressContainer.style.display = "none";
+                    }
                 }
-
-                cleanupAndResolve(markdownLink);
-
-                const originalKB = (result.originalSize / 1024).toFixed(2);
-                const convertedKB = (result.convertedSize / 1024).toFixed(2);
-                const ratio = (((result.originalSize - result.convertedSize) / result.originalSize) * 100).toFixed(1);
-                new Notice(`✅ Image converted: ${originalKB}KB → ${convertedKB}KB (${ratio}% compressed)`);
             } catch (error) {
                 console.error("Image conversion failed:", error);
-                new Notice("❌ Image conversion failed");
+                new Notice("\u274c Image conversion failed");
                 convertBtn.disabled = false;
-                convertBtn.textContent = "Convert & Insert";
+                updateConvertButton();
+                progressContainer.style.display = "none";
             }
         });
 
         // Initialize with file if provided
         if (initialFile) {
-            handleFileSelect(initialFile);
+            handleFilesSelect([initialFile]);
+            dropZone.showPreview(initialFile);
         }
 
         // Mount
@@ -292,8 +383,9 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
                                 // @ts-ignore
                                 const blob = await it.getType(t);
                                 const file = new File([blob], `clipboard-${Date.now()}.${t.split("/")[1]}`, { type: t });
-                                handleFileSelect(file);
-                                new Notice("✅ Clipboard image detected");
+                                handleFilesSelect([file]);
+                                dropZone.showPreview(file);
+                                new Notice("\u2705 Clipboard image detected");
                                 return;
                             }
                         }

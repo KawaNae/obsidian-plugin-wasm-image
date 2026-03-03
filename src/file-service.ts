@@ -1,6 +1,7 @@
 import { App, TFile } from "obsidian";
-import { ConverterSettings, ConverterType } from "./settings";
+import { ConverterSettings, ConverterType, getExtensionForConverter } from "./settings";
 import { convertImageToWebP, ImageProcessingOptions } from "./converters/webp-converter";
+import { convertImageWithCanvas } from "./converters/canvas-converter";
 
 export interface ConversionResult {
   path: string;
@@ -48,16 +49,19 @@ export async function saveImageAndInsert(
   let fileExtension: string;
 
   switch (converterType) {
+    case ConverterType.CANVAS_PNG:
+      convertedBlob = await convertImageWithCanvas(file, "image/png", processingOptions);
+      fileExtension = "png";
+      break;
+    case ConverterType.CANVAS_JPEG:
+      convertedBlob = await convertImageWithCanvas(file, "image/jpeg", processingOptions);
+      fileExtension = "jpg";
+      break;
     case ConverterType.WASM_WEBP:
     default:
       convertedBlob = await convertImageToWebP(file, processingOptions);
       fileExtension = "webp";
       break;
-    // Future converters can be added here:
-    // case ConverterType.WASM_AVIF:
-    //   convertedBlob = await convertImageToAVIF(file, processingOptions);
-    //   fileExtension = "avif";
-    //   break;
   }
 
   const fileName = generateFileName(fileExtension, convertedBlob.size);
@@ -78,7 +82,7 @@ export async function saveImageAndInsert(
  * Centralized for future customization (e.g. regex support).
  */
 export function generateFileName(extension: string, sizeBytes: number): string {
-  const timestamp = (window as any).moment().format("YYYYMMDD[T]HHmmss");
+  const timestamp = (window as any).moment().format("YYYYMMDD[T]HHmmssSSS");
   const sizeKB = (sizeBytes / 1024).toFixed(2);
   return `IMG-${timestamp}-${sizeKB}.${extension}`;
 }
@@ -133,6 +137,14 @@ export async function convertAndReplaceFile(
   let fileExtension: string;
 
   switch (converterType) {
+    case ConverterType.CANVAS_PNG:
+      convertedBlob = await convertImageWithCanvas(file, "image/png", processingOptions);
+      fileExtension = "png";
+      break;
+    case ConverterType.CANVAS_JPEG:
+      convertedBlob = await convertImageWithCanvas(file, "image/jpeg", processingOptions);
+      fileExtension = "jpg";
+      break;
     case ConverterType.WASM_WEBP:
     default:
       convertedBlob = await convertImageToWebP(file, processingOptions);

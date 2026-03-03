@@ -371,7 +371,7 @@ class PresetEditModal extends Modal {
 
     new Setting(contentEl)
       .setName("Attachment folder")
-      .setDesc("Folder where converted WebP images will be saved")
+      .setDesc("Folder where converted images will be saved")
       .addText(text => text
         .setPlaceholder("Attachments")
         .setValue(attachmentFolder)
@@ -381,7 +381,7 @@ class PresetEditModal extends Modal {
 
     new Setting(contentEl)
       .setName("Quality")
-      .setDesc("WebP compression quality (0.1 - 1.0). Higher values mean better quality but larger files.")
+      .setDesc("Compression quality (0.1 - 1.0). Higher values mean better quality but larger files. Not applicable for PNG (lossless).")
       .addText(text => text
         .setPlaceholder("0.8")
         .setValue(String(quality))
@@ -394,7 +394,7 @@ class PresetEditModal extends Modal {
 
     new Setting(contentEl)
       .setName("Convert to grayscale")
-      .setDesc("Convert images to grayscale before WebP conversion")
+      .setDesc("Convert images to grayscale before conversion")
       .addToggle(toggle => toggle
         .setValue(enableGrayscale)
         .onChange((value) => {
