@@ -5,8 +5,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node build.mjs",
-    "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('main.js',{force:true}))\""
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
   },
   "keywords": [
     "obsidian",
@@ -24,6 +24,7 @@
     "url": "https://github.com/KawaNae/Obsidian-wasm-image-converter.git"
   },
   "devDependencies": {
+    "builtin-modules": "^5.0.0",
     "esbuild": "^0.23.0",
     "obsidian": "latest",
     "typescript": "^5.9.2"

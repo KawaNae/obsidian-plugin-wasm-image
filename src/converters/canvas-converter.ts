@@ -59,7 +59,7 @@ export async function convertImageWithCanvas(
       ? new Uint8Array(imageData.data.buffer)
       : (imageData.data as Uint8Array);
     const grayscaled = convertToGrayscale(rgba);
-    const newImageData = new ImageData(new Uint8ClampedArray(grayscaled.buffer), width, height);
+    const newImageData = new ImageData(new Uint8ClampedArray(grayscaled.buffer as ArrayBuffer), width, height);
     ctx.putImageData(newImageData, 0, 0);
   }
 
