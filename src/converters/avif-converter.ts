@@ -58,6 +58,8 @@ export async function convertImageToAVIF(
       ? new (window as any).OffscreenCanvas(width, height)
       : Object.assign(document.createElement("canvas"), { width, height });
   const ctx = (canvas as any).getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.drawImage(bmp, 0, 0, width, height);
   const { data } = ctx.getImageData(0, 0, width, height);
   let rgba = data instanceof Uint8ClampedArray ? new Uint8Array(data.buffer) : (data as Uint8Array);
@@ -76,7 +78,7 @@ export async function convertImageToAVIF(
     width,
     height
   } as any;
-  const encoded = await avifEncode(imageData, { quality: q, speed: 8 });
+  const encoded = await avifEncode(imageData, { quality: q, speed: 6 });
   const bytes = encoded instanceof Uint8Array ? encoded : new Uint8Array(encoded);
   return new Blob([bytes], { type: "image/avif" });
 }

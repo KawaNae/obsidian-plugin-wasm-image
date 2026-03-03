@@ -50,6 +50,8 @@ export async function convertImageWithCanvas(
       ? new (window as any).OffscreenCanvas(width, height)
       : Object.assign(document.createElement("canvas"), { width, height });
   const ctx = (canvas as any).getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.drawImage(bmp, 0, 0, width, height);
 
   // Grayscale conversion (if needed, apply before exporting)
