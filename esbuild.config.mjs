@@ -113,9 +113,18 @@ const copyStaticFiles = {
       try {
         fs.copyFileSync("manifest.json", path.join(outDir, "manifest.json"));
 
-        const stylesSrc = "src/styles/styles.css";
-        if (fs.existsSync(stylesSrc)) {
-          fs.copyFileSync(stylesSrc, path.join(outDir, "styles.css"));
+        // Concatenate CSS files: _variables.css + styles.css
+        const cssDir = "src/styles";
+        const cssFiles = ["_variables.css", "styles.css"];
+        let cssContent = "";
+        for (const file of cssFiles) {
+          const filePath = path.join(cssDir, file);
+          if (fs.existsSync(filePath)) {
+            cssContent += fs.readFileSync(filePath, "utf8") + "\n";
+          }
+        }
+        if (cssContent) {
+          fs.writeFileSync(path.join(outDir, "styles.css"), cssContent);
         }
 
         console.log("Built to " + outDir);

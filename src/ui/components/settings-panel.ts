@@ -23,7 +23,7 @@ export class SettingsPanel {
     }
 
     private render() {
-        this.element.className = "wasm-image-right-col";
+        this.element.className = "wasm-image-modal__right-col";
 
         // Preset
         this.presetSelect = this.createSelect("Preset:", (val) => this.handlePresetChange(val));
@@ -98,7 +98,7 @@ export class SettingsPanel {
 
         // Folder Info
         this.folderInfo = document.createElement("div");
-        this.folderInfo.className = "wasm-image-folder-info";
+        this.folderInfo.className = "wasm-image-modal__folder-info";
         this.folderInfo.textContent = `Save to: ${this.settings.attachmentFolder}/`;
         this.element.appendChild(this.folderInfo);
 
@@ -117,14 +117,14 @@ export class SettingsPanel {
 
     private createSelect(label: string, onChange: (val: string) => void): HTMLSelectElement {
         const row = document.createElement("div");
-        row.className = "wasm-image-setting-row";
+        row.className = "wasm-image-modal__setting-row";
 
         const lbl = document.createElement("label");
-        lbl.className = "wasm-image-setting-label";
+        lbl.className = "wasm-image-modal__setting-label";
         lbl.textContent = label;
 
         const select = document.createElement("select");
-        select.className = "wasm-image-setting-control";
+        select.className = "wasm-image-modal__setting-control";
         select.addEventListener("change", () => onChange(select.value));
 
         row.appendChild(lbl);
@@ -135,15 +135,15 @@ export class SettingsPanel {
 
     private createNumberInput(label: string, min: number, max: number, step: number, initial: number, onChange: (val: number) => void): HTMLInputElement {
         const row = document.createElement("div");
-        row.className = "wasm-image-setting-row";
+        row.className = "wasm-image-modal__setting-row";
 
         const lbl = document.createElement("label");
-        lbl.className = "wasm-image-setting-label";
+        lbl.className = "wasm-image-modal__setting-label";
         lbl.textContent = label;
 
         const input = document.createElement("input");
         input.type = "number";
-        input.className = "wasm-image-setting-control";
+        input.className = "wasm-image-modal__setting-control";
         input.min = String(min);
         input.max = String(max);
         input.step = String(step);
@@ -159,14 +159,14 @@ export class SettingsPanel {
 
     private createCheckbox(label: string, initial: boolean, onChange: (checked: boolean) => void): HTMLInputElement {
         const row = document.createElement("div");
-        row.className = "wasm-image-setting-row";
+        row.className = "wasm-image-modal__setting-row";
 
         const text = document.createElement("label");
-        text.className = "wasm-image-checkbox-label";
+        text.className = "wasm-image-modal__checkbox-label";
         text.textContent = label;
 
         const container = document.createElement("div");
-        container.className = "wasm-image-checkbox-container";
+        container.className = "wasm-image-modal__checkbox-container";
 
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";

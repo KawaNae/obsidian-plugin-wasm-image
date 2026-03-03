@@ -8,7 +8,7 @@ export class PreviewArea {
         this.element.className = "wasm-image-preview";
 
         this.infoDiv = document.createElement("div");
-        this.infoDiv.className = "wasm-image-preview-info";
+        this.infoDiv.className = "wasm-image-preview__info";
     }
 
     public getElement(): HTMLElement {
@@ -27,7 +27,7 @@ export class PreviewArea {
 
         this.previewImage = document.createElement("img");
         this.previewImage.src = URL.createObjectURL(file);
-        this.previewImage.className = "wasm-image-preview-img";
+        this.previewImage.className = "wasm-image-preview__img";
 
         this.element.appendChild(this.previewImage);
         this.element.appendChild(this.infoDiv);

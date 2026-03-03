@@ -42,7 +42,7 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
 
         // Title
         const title = document.createElement("h3");
-        title.className = "wasm-image-modal-title";
+        title.className = "wasm-image-modal__title";
         title.textContent = "Image Converter";
         title.style.margin = "0";
 
@@ -63,24 +63,24 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
 
         // Info Div (for prediction and file size)
         const infoDiv = document.createElement("div");
-        infoDiv.className = "wasm-image-preview-info";
+        infoDiv.className = "wasm-image-preview__info";
         infoDiv.style.marginTop = "10px";
         infoDiv.style.marginBottom = "10px";
         infoDiv.style.textAlign = "center";
 
         // Progress bar container (hidden by default)
         const progressContainer = document.createElement("div");
-        progressContainer.className = "wasm-image-progress-container";
+        progressContainer.className = "wasm-image-progress";
         progressContainer.style.display = "none";
 
         const progressBar = document.createElement("div");
-        progressBar.className = "wasm-image-progress-bar";
+        progressBar.className = "wasm-image-progress__bar";
         const progressFill = document.createElement("div");
-        progressFill.className = "wasm-image-progress-fill";
+        progressFill.className = "wasm-image-progress__fill";
         progressBar.appendChild(progressFill);
 
         const progressText = document.createElement("div");
-        progressText.className = "wasm-image-progress-text";
+        progressText.className = "wasm-image-progress__text";
 
         progressContainer.appendChild(progressBar);
         progressContainer.appendChild(progressText);
@@ -169,16 +169,16 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
 
         // Source Buttons (Paste / Import)
         const sourceBtnRow = document.createElement("div");
-        sourceBtnRow.className = "wasm-image-drop-zone-buttons";
+        sourceBtnRow.className = "wasm-image-drop-zone__buttons";
         sourceBtnRow.style.marginTop = "15px";
         sourceBtnRow.style.marginBottom = "0px";
 
         const pasteBtn = document.createElement("button");
-        pasteBtn.className = "wasm-image-btn wasm-image-drop-btn";
+        pasteBtn.className = "wasm-image-modal__btn wasm-image-drop-zone__btn";
         pasteBtn.style.flex = "1";
         pasteBtn.onclick = () => dropZone.handleClipboardPaste();
         const pasteIcon = document.createElement("span");
-        pasteIcon.className = "wasm-image-btn-icon";
+        pasteIcon.className = "wasm-image-modal__btn-icon";
         setIcon(pasteIcon, "clipboard-paste");
         const pasteText = document.createElement("span");
         pasteText.textContent = " Paste from Clipboard";
@@ -186,11 +186,11 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
         pasteBtn.appendChild(pasteText);
 
         const importBtn = document.createElement("button");
-        importBtn.className = "wasm-image-btn wasm-image-drop-btn";
+        importBtn.className = "wasm-image-modal__btn wasm-image-drop-zone__btn";
         importBtn.style.flex = "1";
         importBtn.onclick = () => dropZone.triggerFileInput();
         const importIcon = document.createElement("span");
-        importIcon.className = "wasm-image-btn-icon";
+        importIcon.className = "wasm-image-modal__btn-icon";
         setIcon(importIcon, "download");
         const importText = document.createElement("span");
         importText.textContent = " Import from system";
@@ -222,12 +222,12 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
 
         // Convert Button
         const btnRow = document.createElement("div");
-        btnRow.className = "wasm-image-btn-row";
+        btnRow.className = "wasm-image-modal__btn-row";
         btnRow.style.justifyContent = "center";
 
         const convertBtn = document.createElement("button");
         convertBtn.textContent = targetTFile ? "Convert" : "Convert & Insert";
-        convertBtn.className = "wasm-image-btn mod-cta";
+        convertBtn.className = "wasm-image-modal__btn mod-cta";
         convertBtn.style.width = "100%";
         convertBtn.style.justifyContent = "center";
         convertBtn.disabled = true;

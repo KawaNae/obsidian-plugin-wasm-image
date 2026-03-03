@@ -1,0 +1,28 @@
+/* ==========================================================================
+   CSS Variable Tokens
+   ========================================================================== */
+
+/* ===== Theme-Independent Constants ===== */
+:root {
+    --wimg-modal-max-width: 500px;
+    --wimg-drop-zone-min-height: 150px;
+    --wimg-drop-zone-max-height: 40vh;
+    --wimg-thumbnail-size: 80px;
+    --wimg-preview-max-height: 200px;
+}
+
+/* ===== Obsidian Theme Mapping ===== */
+body {
+    --wimg-bg-primary: var(--background-primary);
+    --wimg-bg-secondary: var(--background-secondary);
+    --wimg-text: var(--text-normal);
+    --wimg-text-muted: var(--text-muted);
+    --wimg-text-error: var(--text-error);
+    --wimg-accent: var(--interactive-accent);
+    --wimg-accent-text: var(--text-accent);
+    --wimg-border: var(--background-modifier-border);
+    --wimg-bg-hover: var(--background-modifier-hover);
+    --wimg-bg-input: var(--background-modifier-form-field);
+    --wimg-radius-s: var(--radius-s);
+    --wimg-font-ui-small: var(--font-ui-small);
+}

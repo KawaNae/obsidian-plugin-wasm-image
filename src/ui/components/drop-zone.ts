@@ -14,7 +14,7 @@ export class DropZone {
         this.onFilesSelected = onFilesSelected;
         this.element = document.createElement("div");
         this.contentContainer = document.createElement("div");
-        this.contentContainer.className = "wasm-image-drop-zone-content";
+        this.contentContainer.className = "wasm-image-drop-zone__content";
 
         // File input (created once)
         this.fileInput = document.createElement("input");
@@ -30,10 +30,10 @@ export class DropZone {
     public setDisabled(disabled: boolean) {
         this.isDisabled = disabled;
         if (disabled) {
-            this.element.classList.add("disabled");
+            this.element.classList.add("wasm-image-drop-zone--disabled");
             this.fileInput.disabled = true;
         } else {
-            this.element.classList.remove("disabled");
+            this.element.classList.remove("wasm-image-drop-zone--disabled");
             this.fileInput.disabled = false;
         }
     }
@@ -57,18 +57,18 @@ export class DropZone {
         this.element.addEventListener("dragover", (e) => {
             e.preventDefault();
             if (this.isDisabled) return;
-            this.element.classList.add("drag-over");
+            this.element.classList.add("wasm-image-drop-zone--drag-over");
         });
 
         this.element.addEventListener("dragleave", () => {
             if (this.isDisabled) return;
-            this.element.classList.remove("drag-over");
+            this.element.classList.remove("wasm-image-drop-zone--drag-over");
         });
 
         this.element.addEventListener("drop", (e) => {
             e.preventDefault();
             if (this.isDisabled) return;
-            this.element.classList.remove("drag-over");
+            this.element.classList.remove("wasm-image-drop-zone--drag-over");
             const files = e.dataTransfer?.files;
             if (files && files.length > 0) {
                 const newFiles = Array.from(files);
@@ -112,28 +112,28 @@ export class DropZone {
 
             const img = document.createElement("img");
             img.src = url;
-            img.className = "wasm-image-preview-img";
+            img.className = "wasm-image-preview__img";
             img.title = "Drag & drop to replace";
             this.contentContainer.appendChild(img);
         } else {
             // Multiple files: show thumbnail grid
             const grid = document.createElement("div");
-            grid.className = "wasm-image-thumbnail-grid";
+            grid.className = "wasm-image-thumbnail__grid";
 
             this.selectedFiles.forEach((file, index) => {
                 const thumb = document.createElement("div");
-                thumb.className = "wasm-image-thumbnail-item";
+                thumb.className = "wasm-image-thumbnail__item";
 
                 const url = URL.createObjectURL(file);
                 this.currentObjectUrls.push(url);
 
                 const img = document.createElement("img");
                 img.src = url;
-                img.className = "wasm-image-thumbnail-img";
+                img.className = "wasm-image-thumbnail__img";
                 img.title = file.name;
 
                 const removeBtn = document.createElement("button");
-                removeBtn.className = "wasm-image-thumbnail-remove";
+                removeBtn.className = "wasm-image-thumbnail__remove";
                 removeBtn.textContent = "\u00d7";
                 removeBtn.title = "Remove";
                 removeBtn.onclick = (e) => {
@@ -152,9 +152,9 @@ export class DropZone {
 
     public showPlaceholder() {
         this.contentContainer.innerHTML = `
-      <div class="wasm-image-drop-zone-icon">\ud83d\udcf7</div>
+      <div class="wasm-image-drop-zone__icon">\ud83d\udcf7</div>
       <div style="margin-bottom: 5px;">Drag & drop images here</div>
-      <div class="wasm-image-drop-zone-subtext">
+      <div class="wasm-image-drop-zone__subtext">
         Supported: JPG, PNG, GIF, BMP, TIFF (multiple files supported)
       </div>
     `;
