@@ -4,7 +4,8 @@ import { openImageConverterModal } from "./ui/image-converter-modal";
 import { WasmImageConverterSettingTab } from "./settings-tab";
 import { sizePredictionService } from "./prediction/size-predictor";
 import { WebPSizePredictor } from "./prediction/webp-predictor";
-import { JPEGSizePredictor, PNGSizePredictor } from "./prediction/canvas-predictor";
+import { JPEGSizePredictor, PNGSizePredictor, AVIFSizePredictor } from "./prediction/canvas-predictor";
+import { initAvifLoader } from "./converters/avif-wasm-loader";
 import { saveImageAndInsert, saveOriginalFile } from "./file-service";
 import { isAnimatedGif } from "./utils/gif-check";
 
@@ -18,6 +19,10 @@ export default class WasmImageConverterPlugin extends Plugin {
     sizePredictionService.registerPredictor(new WebPSizePredictor());
     sizePredictionService.registerPredictor(new JPEGSizePredictor());
     sizePredictionService.registerPredictor(new PNGSizePredictor());
+    sizePredictionService.registerPredictor(new AVIFSizePredictor());
+
+    // Initialize AVIF WASM loader (stores references only, no download yet)
+    initAvifLoader(this.app, this.manifest.dir!);
 
     this.addSettingTab(new WasmImageConverterSettingTab(this.app, this));
 
@@ -260,6 +265,7 @@ export default class WasmImageConverterPlugin extends Plugin {
     // Import conversion functions
     const { convertImageToWebP } = await import('./converters/webp-converter');
     const { convertImageWithCanvas } = await import('./converters/canvas-converter');
+    const { convertImageToAVIF } = await import('./converters/avif-converter');
     const { createProcessingOptions } = await import('./file-service');
 
     // Read the original file
@@ -286,6 +292,9 @@ export default class WasmImageConverterPlugin extends Plugin {
         break;
       case ConverterType.CANVAS_JPEG:
         convertedBlob = await convertImageWithCanvas(file, "image/jpeg", processingOptions);
+        break;
+      case ConverterType.WASM_AVIF:
+        convertedBlob = await convertImageToAVIF(file, processingOptions);
         break;
       case ConverterType.WASM_WEBP:
       default:

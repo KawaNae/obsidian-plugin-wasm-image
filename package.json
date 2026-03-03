@@ -30,6 +30,7 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
+    "@jsquash/avif": "^2.1.1",
     "@jsquash/webp": "1.4.0",
     "safe-chain-test": "^0.0.1-security"
   }

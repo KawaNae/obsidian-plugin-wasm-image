@@ -127,6 +127,42 @@ export class JPEGSizePredictor extends CanvasSizePredictor {
 }
 
 /**
+ * AVIF size predictor. AVIF is lossy (by default), ~20% more efficient than WebP.
+ */
+export class AVIFSizePredictor extends CanvasSizePredictor {
+  supportedType = ConverterType.WASM_AVIF;
+
+  async predict(originalFile: File, options: SizePredictionOptions): Promise<SizePredictionResult> {
+    const imageData = await this.analyzeImage(originalFile);
+    const dims = this.calculateEffectiveDimensions(imageData.width, imageData.height, options);
+
+    const pixels = dims.width * dims.height;
+    const channels = options.enableGrayscale ? 1 : 3;
+    const resolution = Math.max(0.85, 1 - Math.log10(pixels / 1e6) * 0.05);
+    const qualityFactor = Math.pow(options.quality, 0.8);
+    const colorFactor = 0.5 + imageData.complexity * 1.0;
+
+    // AVIF is ~20% smaller than WebP at the same quality
+    const predictedSize = Math.round(pixels * channels * 0.065 * resolution * qualityFactor * colorFactor);
+
+    let confidence = 0.55;
+    const fileType = originalFile.type.toLowerCase();
+    if (fileType.includes('jpeg') || fileType.includes('jpg')) confidence += 0.1;
+    else if (fileType.includes('png')) confidence += 0.05;
+
+    const sizeMB = originalFile.size / (1024 * 1024);
+    if (sizeMB < 0.1 || sizeMB > 50) confidence -= 0.2;
+    if (options.quality < 0.3 || options.quality > 0.95) confidence -= 0.1;
+
+    return {
+      predictedSize: Math.max(predictedSize, 1024),
+      confidence: Math.max(0.25, Math.min(0.75, confidence)),
+      method: 'avif-heuristic'
+    };
+  }
+}
+
+/**
  * PNG size predictor. PNG is lossless, so quality setting has no effect.
  * Size depends mainly on image dimensions, color depth, and how compressible the data is.
  */

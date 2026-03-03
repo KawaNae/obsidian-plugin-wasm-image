@@ -2,6 +2,7 @@ import { App, TFile } from "obsidian";
 import { ConverterSettings, ConverterType, getExtensionForConverter } from "./settings";
 import { convertImageToWebP, ImageProcessingOptions } from "./converters/webp-converter";
 import { convertImageWithCanvas } from "./converters/canvas-converter";
+import { convertImageToAVIF } from "./converters/avif-converter";
 
 export interface ConversionResult {
   path: string;
@@ -56,6 +57,10 @@ export async function saveImageAndInsert(
     case ConverterType.CANVAS_JPEG:
       convertedBlob = await convertImageWithCanvas(file, "image/jpeg", processingOptions);
       fileExtension = "jpg";
+      break;
+    case ConverterType.WASM_AVIF:
+      convertedBlob = await convertImageToAVIF(file, processingOptions);
+      fileExtension = "avif";
       break;
     case ConverterType.WASM_WEBP:
     default:
@@ -144,6 +149,10 @@ export async function convertAndReplaceFile(
     case ConverterType.CANVAS_JPEG:
       convertedBlob = await convertImageWithCanvas(file, "image/jpeg", processingOptions);
       fileExtension = "jpg";
+      break;
+    case ConverterType.WASM_AVIF:
+      convertedBlob = await convertImageToAVIF(file, processingOptions);
+      fileExtension = "avif";
       break;
     case ConverterType.WASM_WEBP:
     default:
