@@ -281,3 +281,55 @@
     text-align: center;
     margin-top: 4px;
 }
+
+/* Settings Version */
+.wasm-image-settings-version {
+    padding: 4px 0 8px;
+}
+
+/* Settings Tab Navigation */
+.wasm-image-settings .wasm-image-settings__nav {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+}
+
+.wasm-image-settings .wasm-image-settings__nav::-webkit-scrollbar {
+    display: none;
+}
+
+.wasm-image-settings .wasm-image-settings__nav-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 12px 12px;
+    border: 1px solid transparent;
+    border-bottom: none;
+    background-color: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: var(--radius-s) var(--radius-s) 0 0;
+    font-size: var(--font-ui-small);
+    margin-bottom: -1px;
+    box-shadow: none;
+    transition: color 0.15s ease;
+    user-select: none;
+}
+
+.wasm-image-settings .wasm-image-settings__nav-btn:hover {
+    color: var(--text-normal);
+}
+
+.wasm-image-settings .wasm-image-settings__nav-btn--active {
+    border-color: var(--background-modifier-border);
+    background-color: var(--background-primary);
+    color: var(--text-normal);
+}
+
+.wasm-image-settings .wasm-image-settings__content {
+    flex: 1;
+    overflow-y: auto;
+    border-top: 1px solid var(--background-modifier-border);
+    padding: 16px 0 0;
+}

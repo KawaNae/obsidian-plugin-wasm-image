@@ -14,27 +14,68 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
     const { containerEl } = this;
 
     containerEl.empty();
+    containerEl.addClass('wasm-image-settings');
 
     // Version info
-    const versionEl = containerEl.createDiv({
-      text: `v${this.plugin.manifest.version}`,
-      cls: "wasm-image-settings-version"
+    const versionEl = containerEl.createDiv('wasm-image-settings-version');
+    versionEl.createSpan({
+      text: `WASM Image Converter v${this.plugin.manifest.version}`,
+      cls: 'setting-item-description'
     });
-    versionEl.style.textAlign = "right";
-    versionEl.style.color = "var(--text-muted)";
-    versionEl.style.marginBottom = "10px";
-    versionEl.style.fontSize = "0.8em";
+    versionEl.createSpan({
+      text: ` — Built: ${typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'unknown'}`,
+      cls: 'setting-item-description'
+    });
 
-    // ===== General Settings Section (Not saved in presets) =====
-    containerEl.createEl("h3", { text: "General Settings" });
+    // Tab system
+    const tabs = [
+      { id: 'general',  label: 'General',  render: (el: HTMLElement) => this.renderGeneralTab(el) },
+      { id: 'presets',  label: 'Presets',   render: (el: HTMLElement) => this.renderPresetsTab(el) },
+      { id: 'advanced', label: 'Advanced',  render: (el: HTMLElement) => this.renderAdvancedTab(el) },
+    ];
 
-    const generalDesc = containerEl.createEl("div", {
+    const wrapper = containerEl.createDiv('wasm-image-settings__wrapper');
+    const nav = wrapper.createDiv('wasm-image-settings__nav');
+    const content = wrapper.createDiv('wasm-image-settings__content');
+
+    tabs.forEach(tab => {
+      const btn = nav.createEl('div', {
+        cls: 'wasm-image-settings__nav-btn',
+        text: tab.label,
+        attr: { role: 'tab', tabindex: '0' },
+      });
+      btn.dataset.tabId = tab.id;
+
+      const panel = content.createDiv('wasm-image-settings__panel');
+      panel.dataset.tabId = tab.id;
+      tab.render(panel);
+    });
+
+    nav.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('.wasm-image-settings__nav-btn') as HTMLElement | null;
+      if (btn?.dataset.tabId) this.activateTab(wrapper, btn.dataset.tabId);
+    });
+
+    this.activateTab(wrapper, tabs[0].id);
+  }
+
+  private activateTab(wrapper: HTMLElement, tabId: string): void {
+    wrapper.querySelectorAll('.wasm-image-settings__nav-btn').forEach(btn =>
+      btn.toggleClass('wasm-image-settings__nav-btn--active', (btn as HTMLElement).dataset.tabId === tabId)
+    );
+    wrapper.querySelectorAll('.wasm-image-settings__panel').forEach(panel =>
+      (panel as HTMLElement).style.display = (panel as HTMLElement).dataset.tabId === tabId ? '' : 'none'
+    );
+  }
+
+  private renderGeneralTab(el: HTMLElement): void {
+    const generalDesc = el.createEl("div", {
       cls: "setting-item-description",
       text: "These settings apply globally and are not saved in presets."
     });
     generalDesc.style.marginBottom = "15px";
 
-    new Setting(containerEl)
+    new Setting(el)
       .setName("Auto-read clipboard on startup")
       .setDesc("Automatically check clipboard for images when opening the converter (may show permission dialog on mobile devices)")
       .addToggle(toggle => toggle
@@ -44,7 +85,7 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
-    new Setting(containerEl)
+    new Setting(el)
       .setName("Auto-convert on drag & drop")
       .setDesc("Automatically convert images when dragging and dropping them into the editor (desktop only)")
       .addToggle(toggle => toggle
@@ -54,16 +95,14 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
-    new Setting(containerEl)
+    new Setting(el)
       .setName("Auto-convert preset")
       .setDesc("Which preset to use for automatic conversion on drag & drop")
       .addDropdown(dropdown => {
-        // Populate dropdown with available presets
         this.plugin.settings.presets.forEach((preset) => {
           dropdown.addOption(preset.name, preset.name);
         });
 
-        // Set current value, fallback to "Default" if preset doesn't exist
         const currentPreset = this.plugin.settings.autoConvertPreset;
         const presetExists = this.plugin.settings.presets.some(p => p.name === currentPreset);
         dropdown.setValue(presetExists ? currentPreset : "Default");
@@ -74,25 +113,21 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
         });
       });
 
+    el.createEl("h4", { text: "Batch or Auto convert target extensions" });
 
-    containerEl.createEl("h4", { text: "Batch or Auto convert target extensions" });
-
-    const targetExtDesc = containerEl.createDiv({
+    const targetExtDesc = el.createDiv({
       cls: "setting-item-description",
       text: "Select which image extensions to convert (Applies to both Batch Convert and Auto-Convert)"
     });
     targetExtDesc.style.marginBottom = "10px";
 
-    // Create checkboxes for each extension
-    const extensionsContainer = containerEl.createDiv('batch-convert-extensions-container');
+    const extensionsContainer = el.createDiv('batch-convert-extensions-container');
     const availableExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'];
 
     availableExtensions.forEach(ext => {
-      // Special handling for GIF to include nested "Animated GIF" setting
       if (ext === 'gif') {
         const isGifEnabled = this.plugin.settings.batchConvertExtensions.includes('gif');
 
-        // Parent GIF setting
         new Setting(extensionsContainer)
           .setName('GIF')
           .addToggle(toggle => toggle
@@ -107,23 +142,20 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
                   this.plugin.settings.batchConvertExtensions.filter(e => e !== 'gif');
               }
               await this.plugin.saveSettings();
-              // Refresh to update child element state
               this.display();
             }));
 
-        // Nested Animated GIF setting
         const animatedGifSetting = new Setting(extensionsContainer)
           .setName("Animated GIF")
           .setDesc("If enabled, animated GIFs will be converted to WebP (static). If disabled, original GIF is kept.")
           .addToggle(toggle => toggle
             .setValue(this.plugin.settings.processAnimatedGifs)
-            .setDisabled(!isGifEnabled) // Disable if parent is off
+            .setDisabled(!isGifEnabled)
             .onChange(async (value) => {
               this.plugin.settings.processAnimatedGifs = value;
               await this.plugin.saveSettings();
             }));
 
-        // Add indentation style
         animatedGifSetting.settingEl.style.marginLeft = "2em";
         animatedGifSetting.settingEl.style.borderTop = "none";
         if (!isGifEnabled) {
@@ -131,7 +163,6 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
         }
 
       } else {
-        // Standard handling for other extensions
         new Setting(extensionsContainer)
           .setName(ext.toUpperCase())
           .addToggle(toggle => toggle
@@ -149,51 +180,16 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
             }));
       }
     });
+  }
 
-
-    // ===== Presets Section =====
-    containerEl.createEl("h3", { text: "Conversion Presets" });
-
-    const presetsDesc = containerEl.createEl("div", {
+  private renderPresetsTab(el: HTMLElement): void {
+    const presetsDesc = el.createEl("div", {
       cls: "setting-item-description",
       text: "Manage conversion presets that include: Attachment folder, Quality, Grayscale, Resize settings, and Maximum dimensions."
     });
     presetsDesc.style.marginBottom = "15px";
 
-    this.displayPresets();
-
-    // ===== Dangerous Settings Section =====
-    containerEl.createEl("h3", { text: "Dangerous Settings" });
-
-    const dangerDesc = containerEl.createEl("div", {
-      cls: "setting-item-description",
-      text: "These actions cannot be undone. Use with caution."
-    });
-    dangerDesc.style.marginBottom = "15px";
-    dangerDesc.style.color = "var(--text-error)";
-
-    new Setting(containerEl)
-      .setName("Reset All Presets")
-      .setDesc("Reset all presets to factory defaults. This will remove all custom presets and restore only the Default preset.")
-      .addButton(button => button
-        .setButtonText("Reset to Defaults")
-        .setWarning()
-        .onClick(async () => {
-          const confirmed = await this.showResetConfirmation();
-          if (confirmed) {
-            this.plugin.settings.presets = [DEFAULT_PRESET];
-            await this.plugin.saveSettings();
-            this.display();
-          }
-        }));
-  }
-
-  private displayPresets(): void {
-    const { containerEl } = this;
-
-    const presetsContainer = containerEl.createDiv("presets-container");
-
-    new Setting(presetsContainer)
+    new Setting(el)
       .setName("Manage Presets")
       .setDesc("Create and edit conversion presets")
       .addButton(button => button
@@ -203,7 +199,7 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
         }));
 
     if (this.plugin.settings.presets.length === 0) {
-      presetsContainer.createEl("p", {
+      el.createEl("p", {
         cls: "setting-item-description",
         text: "No presets found. Click 'Make Preset' to create one."
       });
@@ -214,7 +210,7 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
       const isDefault = preset.name === "Default";
       const converterLabel = CONVERTER_OPTIONS.find(opt => opt.value === preset.converterType)?.label || preset.converterType;
 
-      new Setting(presetsContainer)
+      new Setting(el)
         .setName(preset.name)
         .setDesc(`Converter: ${converterLabel}, ` +
           `Quality: ${(preset.quality * 100).toFixed(0)}%, ` +
@@ -235,6 +231,30 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
             this.display();
           }));
     });
+  }
+
+  private renderAdvancedTab(el: HTMLElement): void {
+    const dangerDesc = el.createEl("div", {
+      cls: "setting-item-description",
+      text: "These actions cannot be undone. Use with caution."
+    });
+    dangerDesc.style.marginBottom = "15px";
+    dangerDesc.style.color = "var(--text-error)";
+
+    new Setting(el)
+      .setName("Reset All Presets")
+      .setDesc("Reset all presets to factory defaults. This will remove all custom presets and restore only the Default preset.")
+      .addButton(button => button
+        .setButtonText("Reset to Defaults")
+        .setWarning()
+        .onClick(async () => {
+          const confirmed = await this.showResetConfirmation();
+          if (confirmed) {
+            this.plugin.settings.presets = [DEFAULT_PRESET];
+            await this.plugin.saveSettings();
+            this.display();
+          }
+        }));
   }
 
   private async showResetConfirmation(): Promise<boolean> {
