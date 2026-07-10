@@ -163,6 +163,10 @@ export class DropZone {
         this.selectedFiles = [];
     }
 
+    public dispose() {
+        this.revokeAllUrls();
+    }
+
     private revokeAllUrls() {
         this.currentObjectUrls.forEach(url => URL.revokeObjectURL(url));
         this.currentObjectUrls = [];

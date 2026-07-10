@@ -48,7 +48,7 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
 
         // Close Button
         const closeBtn = document.createElement("div");
-        closeBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+        setIcon(closeBtn, "x");
         closeBtn.style.cursor = "pointer";
         closeBtn.style.color = "var(--text-muted)";
         closeBtn.style.display = "flex";
@@ -95,8 +95,8 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
                 // Single file: show detailed info
                 const file = selectedFiles[0];
                 const originalKB = (file.size / 1024).toFixed(1);
-                let infoText = `${file.name}: ${originalKB}kB`;
 
+                let predictionText = '';
                 try {
                     const predictionResult = await sizePredictionService.predictSize(file, {
                         converterType: settingsPanel.converterType,
@@ -110,16 +110,19 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
                     if (predictionResult) {
                         const predictedKB = (predictionResult.predictedSize / 1024).toFixed(1);
                         const compressionRatio = ((file.size - predictionResult.predictedSize) / file.size * 100).toFixed(0);
-                        infoText += ` \u2192 Expected: ${predictedKB}kB (-${compressionRatio}%)`;
+                        predictionText = ` \u2192 Expected: ${predictedKB}kB (-${compressionRatio}%)`;
                     }
                 } catch (error) {
                     console.warn('Size prediction failed:', error);
                 }
 
-                infoDiv.innerHTML = infoText;
-                const ratioMatch = infoText.match(/Expected.*$/);
-                if (ratioMatch) {
-                    infoDiv.innerHTML = infoText.replace(ratioMatch[0], `<span style="color: var(--text-accent);">${ratioMatch[0]}</span>`);
+                infoDiv.textContent = '';
+                infoDiv.appendChild(document.createTextNode(`${file.name}: ${originalKB}kB`));
+                if (predictionText) {
+                    const span = document.createElement('span');
+                    span.style.color = 'var(--text-accent)';
+                    span.textContent = predictionText;
+                    infoDiv.appendChild(span);
                 }
             } else {
                 // Multiple files: show aggregate info
@@ -237,6 +240,7 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
 
         // ===== Logic =====
         function cleanupAndResolve(val?: string) {
+            dropZone.dispose();
             modal.remove();
             resolve(val);
         }

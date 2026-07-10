@@ -1,6 +1,6 @@
-import { App, PluginSettingTab, Setting, Modal } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting, Modal } from "obsidian";
 import WasmImageConverterPlugin from "./main";
-import { PresetSettings, DEFAULT_PRESETS, DEFAULT_PRESET, ConverterType, CONVERTER_OPTIONS } from "./settings";
+import { PresetSettings, DEFAULT_PRESETS, DEFAULT_PRESET, ConverterType, CONVERTER_OPTIONS, BUILTIN_PRESET_NAMES } from "./settings";
 
 export class WasmImageConverterSettingTab extends PluginSettingTab {
   plugin: WasmImageConverterPlugin;
@@ -207,7 +207,7 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
     }
 
     this.plugin.settings.presets.forEach((preset, index) => {
-      const isDefault = preset.name === "Default";
+      const isBuiltin = BUILTIN_PRESET_NAMES.has(preset.name);
       const converterLabel = CONVERTER_OPTIONS.find(opt => opt.value === preset.converterType)?.label || preset.converterType;
 
       new Setting(el)
@@ -224,7 +224,7 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
           }))
         .addButton(button => button
           .setButtonText("Delete")
-          .setDisabled(isDefault)
+          .setDisabled(isBuiltin)
           .onClick(async () => {
             this.plugin.settings.presets.splice(index, 1);
             await this.plugin.saveSettings();
@@ -243,14 +243,14 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
 
     new Setting(el)
       .setName("Reset All Presets")
-      .setDesc("Reset all presets to factory defaults. This will remove all custom presets and restore only the Default preset.")
+      .setDesc("Reset all presets to factory defaults. This will remove all custom presets and restore built-in presets.")
       .addButton(button => button
         .setButtonText("Reset to Defaults")
         .setWarning()
         .onClick(async () => {
           const confirmed = await this.showResetConfirmation();
           if (confirmed) {
-            this.plugin.settings.presets = [DEFAULT_PRESET];
+            this.plugin.settings.presets = [...DEFAULT_PRESETS];
             await this.plugin.saveSettings();
             this.display();
           }
@@ -261,7 +261,7 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
     return new Promise((resolve) => {
       const modal = new ConfirmationModal(this.app, {
         title: "Reset All Presets",
-        message: "Are you sure you want to reset all presets to factory defaults?\n\nThis will:\n• Remove all custom presets\n• Keep only the Default preset\n• Cannot be undone",
+        message: "Are you sure you want to reset all presets to factory defaults?\n\nThis will:\n• Remove all custom presets\n• Restore the built-in presets (Default, Photo, Illustration, Document)\n• Cannot be undone",
         confirmText: "Reset to Defaults",
         cancelText: "Cancel",
         onConfirm: () => resolve(true),
@@ -363,7 +363,7 @@ class PresetEditModal extends Modal {
     let enableGrayscale: boolean = this.preset?.enableGrayscale ?? false;
     let attachmentFolder = this.preset?.attachmentFolder || "Attachments";
 
-    const isDefault = this.preset?.name === "Default";
+    const isBuiltin = this.preset ? BUILTIN_PRESET_NAMES.has(this.preset.name) : false;
 
     new Setting(contentEl)
       .setName("Preset Name")
@@ -371,7 +371,7 @@ class PresetEditModal extends Modal {
       .addText(text => text
         .setPlaceholder("My Preset")
         .setValue(presetName)
-        .setDisabled(isDefault)
+        .setDisabled(isBuiltin)
         .onChange((value) => {
           presetName = value;
         }));
@@ -466,12 +466,21 @@ class PresetEditModal extends Modal {
         .setButtonText(this.isEditing ? "Save Changes" : "Create Preset")
         .setCta()
         .onClick(async () => {
-          if (!presetName.trim()) {
+          const trimmedName = presetName.trim();
+          if (!trimmedName) {
+            return;
+          }
+
+          const isDuplicate = this.isEditing
+            ? this.plugin.settings.presets.some(p => p !== this.preset && p.name === trimmedName)
+            : this.plugin.settings.presets.some(p => p.name === trimmedName);
+          if (isDuplicate) {
+            new Notice("A preset with this name already exists");
             return;
           }
 
           const updatedPreset: PresetSettings = {
-            name: presetName.trim(),
+            name: trimmedName,
             converterType,
             quality,
             maxWidth,

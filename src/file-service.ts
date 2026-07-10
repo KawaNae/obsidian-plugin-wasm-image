@@ -1,4 +1,4 @@
-import { App, TFile } from "obsidian";
+import { App, normalizePath, TFile } from "obsidian";
 import { ConverterSettings, ConverterType, getExtensionForConverter } from "./settings";
 import { convertImageToWebP, ImageProcessingOptions } from "./converters/webp-converter";
 import { convertImageWithCanvas } from "./converters/canvas-converter";
@@ -35,7 +35,7 @@ export async function saveImageAndInsert(
   enableGrayscale: boolean = false,
   converterType: ConverterType = ConverterType.WASM_WEBP
 ): Promise<ConversionResult> {
-  const folder = settings.attachmentFolder;
+  const folder = normalizePath(settings.attachmentFolder);
 
   const processingOptions: ImageProcessingOptions = createProcessingOptions(settings, {
     quality,
@@ -70,7 +70,7 @@ export async function saveImageAndInsert(
   }
 
   const fileName = generateFileName(fileExtension, convertedBlob.size);
-  const destPath = `${folder}/${fileName}`;
+  const destPath = normalizePath(`${folder}/${fileName}`);
 
   // フォルダ無ければ作成
   if (!(await app.vault.adapter.exists(folder))) {
@@ -96,9 +96,11 @@ export function generateFileName(extension: string, sizeBytes: number): string {
  * Saves the original file without conversion, but follows the plugin's naming and folder conventions.
  */
 export async function saveOriginalFile(app: App, file: File, folder: string): Promise<string> {
-  const extension = file.name.split('.').pop() || 'unknown';
+  folder = normalizePath(folder);
+  const m = file.name.match(/\.([^.]+)$/);
+  const extension = m ? m[1] : 'unknown';
   const fileName = generateFileName(extension, file.size);
-  const destPath = `${folder}/${fileName}`;
+  const destPath = normalizePath(`${folder}/${fileName}`);
 
   // Create folder if it doesn't exist
   if (!(await app.vault.adapter.exists(folder))) {
@@ -127,7 +129,7 @@ export async function convertAndReplaceFile(
   enableGrayscale: boolean,
   converterType: ConverterType
 ): Promise<ConversionResult> {
-  const folder = settings.attachmentFolder;
+  const folder = normalizePath(settings.attachmentFolder);
 
   const processingOptions: ImageProcessingOptions = createProcessingOptions(settings, {
     quality,
@@ -183,8 +185,9 @@ export async function replaceFileContentAndPath(
   await app.vault.modifyBinary(targetFile, arrayBuffer);
 
   // Generate new path
+  folder = normalizePath(folder);
   const fileName = generateFileName(newExtension, newContent.size);
-  const destPath = `${folder}/${fileName}`;
+  const destPath = normalizePath(`${folder}/${fileName}`);
 
   // Ensure folder exists
   if (!(await app.vault.adapter.exists(folder))) {

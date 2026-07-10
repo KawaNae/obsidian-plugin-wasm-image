@@ -23,9 +23,10 @@ export async function convertImageWithCanvas(
     } catch {
       return await new Promise<HTMLImageElement>((res, rej) => {
         const img = new Image();
-        img.onload = () => res(img);
-        img.onerror = rej;
-        img.src = URL.createObjectURL(file);
+        const url = URL.createObjectURL(file);
+        img.onload = () => { URL.revokeObjectURL(url); res(img); };
+        img.onerror = (e) => { URL.revokeObjectURL(url); rej(e); };
+        img.src = url;
       });
     }
   })();
@@ -33,14 +34,11 @@ export async function convertImageWithCanvas(
   // Resize
   let width = (bmp as any).width;
   let height = (bmp as any).height;
-  if (options.enableResize && (width > options.maxWidth || height > options.maxHeight)) {
-    const ar = width / height;
-    if (width > height) {
-      width = Math.min(width, options.maxWidth);
-      height = Math.round(width / ar);
-    } else {
-      height = Math.min(height, options.maxHeight);
-      width = Math.round(height * ar);
+  if (options.enableResize) {
+    const scale = Math.min(1, options.maxWidth / width, options.maxHeight / height);
+    if (scale < 1) {
+      width = Math.max(1, Math.round(width * scale));
+      height = Math.max(1, Math.round(height * scale));
     }
   }
 
@@ -53,6 +51,7 @@ export async function convertImageWithCanvas(
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(bmp, 0, 0, width, height);
+  if (typeof (bmp as any).close === "function") (bmp as any).close();
 
   // Grayscale conversion (if needed, apply before exporting)
   if (options.enableGrayscale) {

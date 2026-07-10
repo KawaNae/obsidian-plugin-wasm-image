@@ -45,25 +45,26 @@ export class WebPSizePredictor implements SizePredictor {
       const ctx = canvas.getContext('2d');
 
       img.onload = () => {
-        canvas.width = Math.min(img.width, 200); // Sample size for analysis
+        canvas.width = Math.min(img.width, 200);
         canvas.height = Math.min(img.height, 200);
-        
+
         if (!ctx) {
+          URL.revokeObjectURL(img.src);
           resolve({
             width: img.width,
             height: img.height,
             hasTransparency: false,
-            complexity: 0.5 // Default complexity
+            complexity: 0.5
           });
           return;
         }
 
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        
+
         try {
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const analysis = this.analyzeImageData(imageData);
-          
+
           resolve({
             width: img.width,
             height: img.height,
@@ -71,7 +72,6 @@ export class WebPSizePredictor implements SizePredictor {
             complexity: analysis.complexity
           });
         } catch (error) {
-          // Fallback if canvas analysis fails
           resolve({
             width: img.width,
             height: img.height,
@@ -79,9 +79,12 @@ export class WebPSizePredictor implements SizePredictor {
             complexity: 0.5
           });
         }
+
+        URL.revokeObjectURL(img.src);
       };
 
       img.onerror = () => {
+        URL.revokeObjectURL(img.src);
         reject(new Error('Failed to load image for analysis'));
       };
 

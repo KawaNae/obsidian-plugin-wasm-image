@@ -194,6 +194,7 @@ const context = await esbuild.context({
   target: "es2022",
   logLevel: "info",
   sourcemap: prod ? false : "inline",
+  minify: prod,
   treeShaking: true,
   outfile: path.join(outDir, "main.js"),
   loader: { ".wasm": "dataurl", ".ts": "ts" },

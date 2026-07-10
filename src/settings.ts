@@ -62,8 +62,52 @@ export const DEFAULT_PRESET: PresetSettings = {
   attachmentFolder: "Attachments",
 };
 
+export const BUILTIN_PRESET_PHOTO: PresetSettings = {
+  name: "Photo",
+  converterType: ConverterType.WASM_AVIF,
+  quality: 0.75,
+  maxWidth: 1920,
+  maxHeight: 1080,
+  enableResize: true,
+  enableGrayscale: false,
+  attachmentFolder: "Attachments",
+};
+
+export const BUILTIN_PRESET_ILLUSTRATION: PresetSettings = {
+  name: "Illustration",
+  converterType: ConverterType.WASM_WEBP,
+  quality: 0.9,
+  maxWidth: 1920,
+  maxHeight: 1080,
+  enableResize: true,
+  enableGrayscale: false,
+  attachmentFolder: "Attachments",
+};
+
+export const BUILTIN_PRESET_DOCUMENT: PresetSettings = {
+  name: "Document",
+  converterType: ConverterType.WASM_WEBP,
+  quality: 0.5,
+  maxWidth: 1200,
+  maxHeight: 1600,
+  enableResize: true,
+  enableGrayscale: true,
+  attachmentFolder: "Attachments",
+};
+
+/** Names of built-in presets that cannot be deleted */
+export const BUILTIN_PRESET_NAMES = new Set([
+  DEFAULT_PRESET.name,
+  BUILTIN_PRESET_PHOTO.name,
+  BUILTIN_PRESET_ILLUSTRATION.name,
+  BUILTIN_PRESET_DOCUMENT.name,
+]);
+
 export const DEFAULT_PRESETS: PresetSettings[] = [
   DEFAULT_PRESET,
+  BUILTIN_PRESET_PHOTO,
+  BUILTIN_PRESET_ILLUSTRATION,
+  BUILTIN_PRESET_DOCUMENT,
 ];
 
 export const DEFAULT_SETTINGS: ConverterSettings = {

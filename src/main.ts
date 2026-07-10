@@ -1,5 +1,5 @@
-import { Notice, Plugin, Editor, Platform, MarkdownView, TFile, Modal } from "obsidian";
-import { ConverterSettings, ConverterType, DEFAULT_SETTINGS, getExtensionForConverter } from "./settings";
+import { Notice, Plugin, Editor, Platform, MarkdownView, TFile, Modal, normalizePath } from "obsidian";
+import { ConverterSettings, ConverterType, DEFAULT_SETTINGS, DEFAULT_PRESETS, BUILTIN_PRESET_NAMES, getExtensionForConverter } from "./settings";
 import { openImageConverterModal } from "./ui/image-converter-modal";
 import { WasmImageConverterSettingTab } from "./settings-tab";
 import { sizePredictionService } from "./prediction/size-predictor";
@@ -113,6 +113,13 @@ export default class WasmImageConverterPlugin extends Plugin {
 
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    // Ensure all built-in presets exist (for users upgrading from older versions)
+    const existingNames = new Set(this.settings.presets.map(p => p.name));
+    for (const builtin of DEFAULT_PRESETS) {
+      if (!existingNames.has(builtin.name)) {
+        this.settings.presets.push({ ...builtin });
+      }
+    }
   }
 
   async saveSettings() {
@@ -310,11 +317,11 @@ export default class WasmImageConverterPlugin extends Plugin {
     await this.app.vault.modifyBinary(imageFile, convertedArrayBuffer);
 
     // Generate new path in attachment folder
-    const folder = selectedPreset.attachmentFolder;
+    const folder = normalizePath(selectedPreset.attachmentFolder);
     const timestamp = (window as any).moment().format("YYYYMMDD[T]HHmmssSSS");
     const sizeKB = (convertedSize / 1024).toFixed(2);
     const fileName = `IMG-${timestamp}-${sizeKB}.${fileExtension}`;
-    const destPath = `${folder}/${fileName}`;
+    const destPath = normalizePath(`${folder}/${fileName}`);
 
     // Create folder if it doesn't exist
     if (!(await this.app.vault.adapter.exists(folder))) {
@@ -334,11 +341,14 @@ export default class WasmImageConverterPlugin extends Plugin {
   // ===== Auto-Convert Events =====
 
   private registerAutoConvertEvents() {
-    // Auto-convert disabled or mobile platform
-    if (!this.settings.enableAutoConvert || Platform.isMobile) return;
+    // Auto-convert is desktop-only (platform never changes at runtime)
+    if (Platform.isMobile) return;
 
     this.registerEvent(
       this.app.workspace.on("editor-drop", async (evt: DragEvent, editor: Editor) => {
+        // Check at event time so settings changes take effect without reload
+        if (!this.settings.enableAutoConvert) return;
+
         if (!evt.dataTransfer) {
           console.warn("DataTransfer object is null. Cannot process drop event.");
           return;
@@ -376,6 +386,9 @@ export default class WasmImageConverterPlugin extends Plugin {
     // Register paste event handler
     this.registerEvent(
       this.app.workspace.on("editor-paste", async (evt: ClipboardEvent, editor: Editor) => {
+        // Check at event time so settings changes take effect without reload
+        if (!this.settings.enableAutoConvert) return;
+
         if (!evt.clipboardData) {
           console.warn("ClipboardData object is null. Cannot process paste event.");
           return;
@@ -594,11 +607,8 @@ export default class WasmImageConverterPlugin extends Plugin {
 
   setupAutoOrganizeImages() {
     if (!this.settings.enableAutoOrganizeImages) {
-      console.log('[Auto-Organize] Disabled in settings');
       return;
     }
-
-    console.log('[Auto-Organize] Setting up image file watcher...');
 
     this.registerEvent(
       this.app.vault.on('create', async (file) => {
@@ -612,8 +622,6 @@ export default class WasmImageConverterPlugin extends Plugin {
           return;
         }
 
-        console.log('[Auto-Organize] New image detected:', file.path);
-
         // Wait a bit to ensure the file is fully written
         await new Promise(resolve => setTimeout(resolve, 300));
 
@@ -625,8 +633,6 @@ export default class WasmImageConverterPlugin extends Plugin {
         }
       })
     );
-
-    console.log('[Auto-Organize] Image file watcher registered');
   }
 
   private isSupportedImageFile(file: TFile): boolean {
@@ -634,8 +640,6 @@ export default class WasmImageConverterPlugin extends Plugin {
   }
 
   private async organizeImage(imageFile: TFile): Promise<void> {
-    console.log('[Auto-Organize] Starting organization for:', imageFile.name);
-
     try {
       // Check for animated GIF
       if (imageFile.extension.toLowerCase() === 'gif') {
@@ -643,7 +647,6 @@ export default class WasmImageConverterPlugin extends Plugin {
         const blob = new Blob([arrayBuffer]);
         if (await isAnimatedGif(blob)) {
           if (!this.settings.processAnimatedGifs) {
-            console.log('[Auto-Organize] Skipped animated GIF:', imageFile.name);
             return;
           }
         }
@@ -683,8 +686,6 @@ export default class WasmImageConverterPlugin extends Plugin {
         selectedPreset.converterType
       );
 
-      console.log('[Auto-Organize] Conversion successful:', result.path);
-
       // Get the converted file
       const convertedFile = this.app.vault.getAbstractFileByPath(result.path);
       if (!(convertedFile instanceof TFile)) {
@@ -694,8 +695,6 @@ export default class WasmImageConverterPlugin extends Plugin {
       // Rename the original file to match the converted file location
       // This will trigger Obsidian's automatic link update
       await this.app.fileManager.renameFile(convertedFile, imageFile.path);
-
-      console.log('[Auto-Organize] Replaced original file with converted file');
 
       // Show success notification
       const originalKB = (result.originalSize / 1024).toFixed(2);
