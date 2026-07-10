@@ -45,25 +45,26 @@ export class WebPSizePredictor implements SizePredictor {
       const ctx = canvas.getContext('2d');
 
       img.onload = () => {
-        canvas.width = Math.min(img.width, 200); // Sample size for analysis
+        canvas.width = Math.min(img.width, 200);
         canvas.height = Math.min(img.height, 200);
-        
+
         if (!ctx) {
+          URL.revokeObjectURL(img.src);
           resolve({
             width: img.width,
             height: img.height,
             hasTransparency: false,
-            complexity: 0.5 // Default complexity
+            complexity: 0.5
           });
           return;
         }
 
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        
+
         try {
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const analysis = this.analyzeImageData(imageData);
-          
+
           resolve({
             width: img.width,
             height: img.height,
@@ -71,7 +72,6 @@ export class WebPSizePredictor implements SizePredictor {
             complexity: analysis.complexity
           });
         } catch (error) {
-          // Fallback if canvas analysis fails
           resolve({
             width: img.width,
             height: img.height,
@@ -79,9 +79,12 @@ export class WebPSizePredictor implements SizePredictor {
             complexity: 0.5
           });
         }
+
+        URL.revokeObjectURL(img.src);
       };
 
       img.onerror = () => {
+        URL.revokeObjectURL(img.src);
         reject(new Error('Failed to load image for analysis'));
       };
 
@@ -181,13 +184,15 @@ export class WebPSizePredictor implements SizePredictor {
   }
 
   private webpSizePredict(width: number, height: number, quality: number, isGray: boolean, colorComplexity: number): number {
+    // Power-law model: bytes ≈ pixels^0.75 × 3.0 × complexity^0.42,
+    // calibrated at q=0.8 against real encodes
+    // (docs/size-prediction-experiment-2026-07-10.md)
     const pixels = width * height;
-    const channels = isGray ? 1 : 3;
-    const resolution = Math.max(0.85, 1 - Math.log10(pixels/1e6) * 0.05);
-    const qualityFactor = Math.pow(quality/100, 0.75);
-    const colorFactor = 0.5 + colorComplexity * 1.0;
-    
-    return Math.round(pixels * channels * 0.08 * resolution * qualityFactor * colorFactor);
+    const contentFactor = 3.0 * Math.pow(colorComplexity, 0.42);
+    const qualityFactor = Math.pow((quality / 100) / 0.8, 0.75);
+    const grayFactor = isGray ? 0.7 : 1;
+
+    return Math.round(Math.pow(pixels, 0.75) * contentFactor * qualityFactor * grayFactor);
   }
 
 

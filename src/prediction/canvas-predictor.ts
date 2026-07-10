@@ -100,14 +100,14 @@ export class JPEGSizePredictor extends CanvasSizePredictor {
     const imageData = await this.analyzeImage(originalFile);
     const dims = this.calculateEffectiveDimensions(imageData.width, imageData.height, options);
 
+    // Power-law model: bytes ≈ pixels^0.8 × 3.0 × complexity^0.42,
+    // calibrated at q=0.8 against real encodes
+    // (docs/size-prediction-experiment-2026-07-10.md)
     const pixels = dims.width * dims.height;
-    const channels = options.enableGrayscale ? 1 : 3;
-    const resolution = Math.max(0.85, 1 - Math.log10(pixels / 1e6) * 0.05);
-    const qualityFactor = Math.pow(options.quality, 0.7);
-    const colorFactor = 0.5 + imageData.complexity * 1.0;
-
-    // JPEG is ~30% larger than WebP at the same quality
-    const predictedSize = Math.round(pixels * channels * 0.10 * resolution * qualityFactor * colorFactor);
+    const contentFactor = 3.0 * Math.pow(imageData.complexity, 0.42);
+    const qualityFactor = Math.pow(options.quality / 0.8, 0.7);
+    const grayFactor = options.enableGrayscale ? 0.7 : 1;
+    const predictedSize = Math.round(Math.pow(pixels, 0.8) * contentFactor * qualityFactor * grayFactor);
 
     let confidence = 0.65;
     const fileType = originalFile.type.toLowerCase();
@@ -127,6 +127,43 @@ export class JPEGSizePredictor extends CanvasSizePredictor {
 }
 
 /**
+ * AVIF size predictor. AVIF is lossy (by default), ~20% more efficient than WebP.
+ */
+export class AVIFSizePredictor extends CanvasSizePredictor {
+  supportedType = ConverterType.WASM_AVIF;
+
+  async predict(originalFile: File, options: SizePredictionOptions): Promise<SizePredictionResult> {
+    const imageData = await this.analyzeImage(originalFile);
+    const dims = this.calculateEffectiveDimensions(imageData.width, imageData.height, options);
+
+    // Power-law model: bytes ≈ pixels^0.65 × 18.3 × complexity^0.76,
+    // calibrated at q=0.75 against real encodes. AVIF flattens detail more
+    // aggressively at scale, hence the lower pixel exponent.
+    // (docs/size-prediction-experiment-2026-07-10.md)
+    const pixels = dims.width * dims.height;
+    const contentFactor = 18.3 * Math.pow(imageData.complexity, 0.76);
+    const qualityFactor = Math.pow(options.quality / 0.75, 0.8);
+    const grayFactor = options.enableGrayscale ? 0.7 : 1;
+    const predictedSize = Math.round(Math.pow(pixels, 0.65) * contentFactor * qualityFactor * grayFactor);
+
+    let confidence = 0.55;
+    const fileType = originalFile.type.toLowerCase();
+    if (fileType.includes('jpeg') || fileType.includes('jpg')) confidence += 0.1;
+    else if (fileType.includes('png')) confidence += 0.05;
+
+    const sizeMB = originalFile.size / (1024 * 1024);
+    if (sizeMB < 0.1 || sizeMB > 50) confidence -= 0.2;
+    if (options.quality < 0.3 || options.quality > 0.95) confidence -= 0.1;
+
+    return {
+      predictedSize: Math.max(predictedSize, 1024),
+      confidence: Math.max(0.25, Math.min(0.75, confidence)),
+      method: 'avif-heuristic'
+    };
+  }
+}
+
+/**
  * PNG size predictor. PNG is lossless, so quality setting has no effect.
  * Size depends mainly on image dimensions, color depth, and how compressible the data is.
  */
@@ -137,12 +174,19 @@ export class PNGSizePredictor extends CanvasSizePredictor {
     const imageData = await this.analyzeImage(originalFile);
     const dims = this.calculateEffectiveDimensions(imageData.width, imageData.height, options);
 
+    // Power-law model: bytes ≈ pixels^0.75 × 302 × complexity^1.7 with a
+    // pixels×0.02 floor (PNG filter/entropy overhead). Lossless, so no
+    // quality factor. PNG scales the least regularly of all formats; expect
+    // roughly ±40% on real content — still far better than the old linear
+    // model, which was ~17x off on screenshots.
+    // (docs/size-prediction-experiment-2026-07-10.md)
     const pixels = dims.width * dims.height;
-    const channels = options.enableGrayscale ? 2 : 4; // PNG stores with alpha
-    // PNG compression ratio varies widely: simple images compress well, complex ones don't
-    const compressionFactor = 0.3 + imageData.complexity * 0.7; // 0.3 for simple, 1.0 for complex
-
-    const predictedSize = Math.round(pixels * channels * compressionFactor);
+    const contentFactor = 302 * Math.pow(imageData.complexity, 1.7);
+    const grayFactor = options.enableGrayscale ? 0.7 : 1;
+    const predictedSize = Math.round(Math.max(
+      Math.pow(pixels, 0.75) * contentFactor * grayFactor,
+      pixels * 0.02
+    ));
 
     // PNG predictions are less reliable than lossy formats
     let confidence = 0.5;

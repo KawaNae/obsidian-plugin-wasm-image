@@ -1,7 +1,8 @@
-import { App, TFile } from "obsidian";
+import { App, normalizePath, TFile, TFolder } from "obsidian";
 import { ConverterSettings, ConverterType, getExtensionForConverter } from "./settings";
 import { convertImageToWebP, ImageProcessingOptions } from "./converters/webp-converter";
 import { convertImageWithCanvas } from "./converters/canvas-converter";
+import { convertImageToAVIF } from "./converters/avif-converter";
 
 export interface ConversionResult {
   path: string;
@@ -23,6 +24,33 @@ export function createProcessingOptions(
   };
 }
 
+/**
+ * Ensures a folder exists using the Vault API so Obsidian's file index
+ * knows about it immediately (adapter.mkdir bypasses the index).
+ */
+async function ensureFolder(app: App, folder: string): Promise<void> {
+  if (app.vault.getAbstractFileByPath(folder) instanceof TFolder) return;
+  try {
+    await app.vault.createFolder(folder);
+  } catch (e) {
+    // Another writer may have created it concurrently
+    if (!(app.vault.getAbstractFileByPath(folder) instanceof TFolder)) throw e;
+  }
+}
+
+/**
+ * Creates a binary file via the Vault API, deduplicating the name on the
+ * (unlikely) chance the timestamp-based name already exists.
+ */
+async function createBinaryFile(app: App, destPath: string, data: ArrayBuffer): Promise<string> {
+  let path = destPath;
+  for (let i = 1; app.vault.getAbstractFileByPath(path) && i < 10; i++) {
+    path = destPath.replace(/(\.[^.]+)$/, `-${i}$1`);
+  }
+  await app.vault.createBinary(path, data);
+  return path;
+}
+
 export async function saveImageAndInsert(
   app: App,
   file: File,
@@ -34,7 +62,7 @@ export async function saveImageAndInsert(
   enableGrayscale: boolean = false,
   converterType: ConverterType = ConverterType.WASM_WEBP
 ): Promise<ConversionResult> {
-  const folder = settings.attachmentFolder;
+  const folder = normalizePath(settings.attachmentFolder);
 
   const processingOptions: ImageProcessingOptions = createProcessingOptions(settings, {
     quality,
@@ -57,6 +85,10 @@ export async function saveImageAndInsert(
       convertedBlob = await convertImageWithCanvas(file, "image/jpeg", processingOptions);
       fileExtension = "jpg";
       break;
+    case ConverterType.WASM_AVIF:
+      convertedBlob = await convertImageToAVIF(file, processingOptions);
+      fileExtension = "avif";
+      break;
     case ConverterType.WASM_WEBP:
     default:
       convertedBlob = await convertImageToWebP(file, processingOptions);
@@ -65,16 +97,13 @@ export async function saveImageAndInsert(
   }
 
   const fileName = generateFileName(fileExtension, convertedBlob.size);
-  const destPath = `${folder}/${fileName}`;
+  const destPath = normalizePath(`${folder}/${fileName}`);
 
-  // フォルダ無ければ作成
-  if (!(await app.vault.adapter.exists(folder))) {
-    await app.vault.adapter.mkdir(folder);
-  }
+  await ensureFolder(app, folder);
   const ab = await convertedBlob.arrayBuffer();
-  await app.vault.adapter.writeBinary(destPath, ab);
+  const savedPath = await createBinaryFile(app, destPath, ab);
 
-  return { path: destPath, originalSize: file.size, convertedSize: convertedBlob.size };
+  return { path: savedPath, originalSize: file.size, convertedSize: convertedBlob.size };
 }
 
 /**
@@ -91,19 +120,15 @@ export function generateFileName(extension: string, sizeBytes: number): string {
  * Saves the original file without conversion, but follows the plugin's naming and folder conventions.
  */
 export async function saveOriginalFile(app: App, file: File, folder: string): Promise<string> {
-  const extension = file.name.split('.').pop() || 'unknown';
+  folder = normalizePath(folder);
+  const m = file.name.match(/\.([^.]+)$/);
+  const extension = m ? m[1] : 'unknown';
   const fileName = generateFileName(extension, file.size);
-  const destPath = `${folder}/${fileName}`;
+  const destPath = normalizePath(`${folder}/${fileName}`);
 
-  // Create folder if it doesn't exist
-  if (!(await app.vault.adapter.exists(folder))) {
-    await app.vault.adapter.mkdir(folder);
-  }
-
+  await ensureFolder(app, folder);
   const arrayBuffer = await file.arrayBuffer();
-  await app.vault.adapter.writeBinary(destPath, arrayBuffer);
-
-  return destPath;
+  return await createBinaryFile(app, destPath, arrayBuffer);
 }
 
 /**
@@ -122,7 +147,7 @@ export async function convertAndReplaceFile(
   enableGrayscale: boolean,
   converterType: ConverterType
 ): Promise<ConversionResult> {
-  const folder = settings.attachmentFolder;
+  const folder = normalizePath(settings.attachmentFolder);
 
   const processingOptions: ImageProcessingOptions = createProcessingOptions(settings, {
     quality,
@@ -144,6 +169,10 @@ export async function convertAndReplaceFile(
     case ConverterType.CANVAS_JPEG:
       convertedBlob = await convertImageWithCanvas(file, "image/jpeg", processingOptions);
       fileExtension = "jpg";
+      break;
+    case ConverterType.WASM_AVIF:
+      convertedBlob = await convertImageToAVIF(file, processingOptions);
+      fileExtension = "avif";
       break;
     case ConverterType.WASM_WEBP:
     default:
@@ -169,21 +198,31 @@ export async function replaceFileContentAndPath(
 ): Promise<ConversionResult> {
   const originalSize = targetFile.stat.size;
 
+  // Keep original bytes so a failure after the overwrite can be rolled back
+  const originalData = await app.vault.readBinary(targetFile);
+
+  // Generate new path and ensure the folder exists before touching the file
+  folder = normalizePath(folder);
+  const fileName = generateFileName(newExtension, newContent.size);
+  const destPath = normalizePath(`${folder}/${fileName}`);
+  await ensureFolder(app, folder);
+
   // Overwrite content
   const arrayBuffer = await newContent.arrayBuffer();
   await app.vault.modifyBinary(targetFile, arrayBuffer);
 
-  // Generate new path
-  const fileName = generateFileName(newExtension, newContent.size);
-  const destPath = `${folder}/${fileName}`;
-
-  // Ensure folder exists
-  if (!(await app.vault.adapter.exists(folder))) {
-    await app.vault.adapter.mkdir(folder);
-  }
-
   // Rename/Move file (triggers link updates)
-  await app.fileManager.renameFile(targetFile, destPath);
+  try {
+    await app.fileManager.renameFile(targetFile, destPath);
+  } catch (renameError) {
+    // Restore the original bytes so no corrupted file is left behind
+    try {
+      await app.vault.modifyBinary(targetFile, originalData);
+    } catch (rollbackError) {
+      console.error("Rollback after failed rename also failed:", rollbackError);
+    }
+    throw renameError;
+  }
 
   return {
     path: destPath,

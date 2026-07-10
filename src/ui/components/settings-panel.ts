@@ -82,7 +82,9 @@ export class SettingsPanel {
 
         // Max Width
         this.maxWInput = this.createNumberInput("Max Width:", 100, 5000, 1, this.settings.maxWidth, (val) => {
-            this.settings.maxWidth = val;
+            const clamped = Number.isFinite(val) && val >= 1 ? Math.round(val) : 1;
+            this.maxWInput.value = String(clamped);
+            this.settings.maxWidth = clamped;
             this.presetSelect.value = "default";
             this.notifyChange();
         });
@@ -90,7 +92,9 @@ export class SettingsPanel {
 
         // Max Height
         this.maxHInput = this.createNumberInput("Max Height:", 100, 5000, 1, this.settings.maxHeight, (val) => {
-            this.settings.maxHeight = val;
+            const clamped = Number.isFinite(val) && val >= 1 ? Math.round(val) : 1;
+            this.maxHInput.value = String(clamped);
+            this.settings.maxHeight = clamped;
             this.presetSelect.value = "default";
             this.notifyChange();
         });

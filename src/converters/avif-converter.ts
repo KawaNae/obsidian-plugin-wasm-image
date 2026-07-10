@@ -1,17 +1,27 @@
+import avifEncode, { init as initAvifEncode } from "@jsquash/avif/encode";
 import { convertToGrayscale } from "./grayscale";
+import { getAvifWasmModule } from "./avif-wasm-loader";
 import { ImageProcessingOptions } from "./webp-converter";
 
-export type CanvasOutputType = "image/png" | "image/jpeg";
+let initPromise: Promise<void> | null = null;
 
 /**
- * Converts an image to PNG or JPEG using the Canvas API.
- * Reuses the same image loading, resizing, and grayscale pipeline as webp-converter.
+ * Converts an image to AVIF using the @jsquash/avif WASM encoder.
+ * On first call, downloads the WASM module if not cached locally.
  */
-export async function convertImageWithCanvas(
+export async function convertImageToAVIF(
   file: Blob,
-  outputType: CanvasOutputType,
   options: ImageProcessingOptions
 ): Promise<Blob> {
+  // Ensure WASM is loaded and initialized
+  if (!initPromise) {
+    initPromise = (async () => {
+      const wasmModule = await getAvifWasmModule();
+      await initAvifEncode(wasmModule);
+    })().catch(err => { initPromise = null; throw err; });
+  }
+  await initPromise;
+
   // Load image (createImageBitmap → <img> fallback)
   const bmp = await (async () => {
     try {
@@ -42,7 +52,7 @@ export async function convertImageWithCanvas(
     }
   }
 
-  // Canvas
+  // Canvas → RGBA
   const canvas =
     typeof (window as any).OffscreenCanvas !== "undefined"
       ? new (window as any).OffscreenCanvas(width, height)
@@ -51,36 +61,25 @@ export async function convertImageWithCanvas(
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(bmp, 0, 0, width, height);
+  const { data } = ctx.getImageData(0, 0, width, height);
   if (typeof (bmp as any).close === "function") (bmp as any).close();
+  let rgba = data instanceof Uint8ClampedArray ? new Uint8Array(data.buffer) : (data as Uint8Array);
 
-  // Grayscale conversion (if needed, apply before exporting)
+  // Grayscale
   if (options.enableGrayscale) {
-    const imageData = ctx.getImageData(0, 0, width, height);
-    const rgba = imageData.data instanceof Uint8ClampedArray
-      ? new Uint8Array(imageData.data.buffer)
-      : (imageData.data as Uint8Array);
-    const grayscaled = convertToGrayscale(rgba);
-    const newImageData = new ImageData(new Uint8ClampedArray(grayscaled.buffer as ArrayBuffer), width, height);
-    ctx.putImageData(newImageData, 0, 0);
+    rgba = convertToGrayscale(rgba);
   }
 
-  // Export using Canvas API
-  const quality = outputType === "image/jpeg" ? options.quality : undefined;
+  // quality: 0.1-1.0 → 0-100
+  const q = Math.max(0, Math.min(100, Math.round(options.quality <= 1 ? options.quality * 100 : options.quality)));
 
-  if (typeof canvas.convertToBlob === "function") {
-    // OffscreenCanvas
-    return await canvas.convertToBlob({ type: outputType, quality });
-  } else {
-    // HTMLCanvasElement
-    return await new Promise<Blob>((resolve, reject) => {
-      (canvas as HTMLCanvasElement).toBlob(
-        (blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error("Canvas toBlob returned null"));
-        },
-        outputType,
-        quality
-      );
-    });
-  }
+  // AVIF encode
+  const imageData = {
+    data: rgba as Uint8Array,
+    width,
+    height
+  } as any;
+  const encoded = await avifEncode(imageData, { quality: q, speed: 6 });
+  const bytes = encoded instanceof Uint8Array ? encoded : new Uint8Array(encoded);
+  return new Blob([bytes], { type: "image/avif" });
 }

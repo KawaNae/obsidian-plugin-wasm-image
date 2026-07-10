@@ -56,7 +56,8 @@ const fixJsquash = {
   name: "fix-jsquash",
   setup(build) {
     // Windows のバックスラッシュにもマッチするように [/\\] を使用
-    const filter = /(?:^|[/\\])node_modules[/\\]@jsquash[/\\].*\.(?:js|mjs|cjs)$/;
+    // Only inline WASM for @jsquash/webp. AVIF WASM is loaded on-demand at runtime.
+    const filter = /(?:^|[/\\])node_modules[/\\]@jsquash[/\\]webp[/\\].*\.(?:js|mjs|cjs)$/;
 
     build.onLoad({ filter }, async (args) => {
       let code = await fs.promises.readFile(args.path, "utf8");
@@ -78,7 +79,20 @@ const fixJsquash = {
         code.match(/["']([^"']*webp_enc[^"']*\.wasm)["']/)?.[1] ||
         code.match(/["']([^"']*\.wasm)["']/)?.[1];
 
-      if (wasmRel) {
+      if (wasmRel && /(?:^|[/\\])webp_enc\.wasm$/.test(wasmRel)) {
+        // 非SIMD版はバンドルしない（非SIMD環境でのみ実行時ダウンロード。
+        // webp-converter.ts の nonSimdFallback が init(module) で供給する）
+        code = code.replace(
+          /new\s+URL\s*\(\s*[^,]+,\s*(?:import\.meta|import_meta)\.url\s*\)/g,
+          'new URL("data:,")'
+        );
+        code = code.replace(
+          /wasmBinaryFile\s*=\s*["'][^"']*\.wasm["']\s*;/g,
+          'wasmBinaryFile = "data:,";'
+        );
+
+        console.log(`[stub] ${path.basename(args.path)} -> ${wasmRel} (runtime download)`);
+      } else if (wasmRel) {
         const wasmAbs = path.join(dir, wasmRel);
         const wasmBin = await fs.promises.readFile(wasmAbs);
         const dataPrefix = "data:application/octet-stream;base64,";
@@ -100,6 +114,46 @@ const fixJsquash = {
 
         console.log(`[inline] ${path.basename(args.path)} -> ${path.basename(wasmAbs)} (inlined)`);
       }
+
+      return { contents: code, loader: "js" };
+    });
+  },
+};
+
+/**
+ * @jsquash/avif 配下の Emscripten JS を安全形に変換するが、
+ * WASM はインラインにしない（実行時に外部からロードするため）。
+ * WASM ファイル参照はダミー文字列に置換して esbuild による dataurl 化を防ぐ。
+ */
+const fixJsquashAvif = {
+  name: "fix-jsquash-avif",
+  setup(build) {
+    const filter = /(?:^|[/\\])node_modules[/\\]@jsquash[/\\]avif[/\\].*\.(?:js|mjs|cjs)$/;
+
+    build.onLoad({ filter }, async (args) => {
+      let code = await fs.promises.readFile(args.path, "utf8");
+
+      // Emscripten のデフォルト引数を安全形へ
+      code = code
+        .replace(
+          /function\s*\(\s*Module\s*=\s*\{\}\s*\)\s*\{/g,
+          'function(Module){ Module = Module || {};'
+        )
+        .replace(
+          /function\s*\(\s*Module\s*=\s*Module\s*\|\|\s*\{\}\s*\)\s*\{/g,
+          'function(Module){ Module = Module || {};'
+        );
+
+      // WASM ファイル参照をダミーに置換
+      // (init(wasmModule) で pre-compiled module を渡すため、この参照は使われない)
+      code = code.replace(
+        /new\s+URL\s*\(\s*[^,]+,\s*(?:import\.meta|import_meta)\.url\s*\)/g,
+        'new URL("data:,")'
+      );
+      code = code.replace(
+        /wasmBinaryFile\s*=\s*["'][^"']*\.wasm["']\s*;/g,
+        'wasmBinaryFile = "data:,";'
+      );
 
       return { contents: code, loader: "js" };
     });
@@ -153,10 +207,11 @@ const context = await esbuild.context({
   target: "es2022",
   logLevel: "info",
   sourcemap: prod ? false : "inline",
+  minify: prod,
   treeShaking: true,
   outfile: path.join(outDir, "main.js"),
   loader: { ".wasm": "dataurl", ".ts": "ts" },
-  plugins: [fixJsquash, copyStaticFiles],
+  plugins: [fixJsquash, fixJsquashAvif, copyStaticFiles],
 });
 
 if (prod) {

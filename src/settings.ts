@@ -2,8 +2,7 @@ export enum ConverterType {
   WASM_WEBP = "wasm-webp",
   CANVAS_PNG = "canvas-png",
   CANVAS_JPEG = "canvas-jpeg",
-  // Future converters can be added here
-  // WASM_AVIF = "wasm-avif",
+  WASM_AVIF = "wasm-avif",
 }
 
 export interface PresetSettings {
@@ -15,14 +14,14 @@ export interface PresetSettings {
   enableResize: boolean;
   enableGrayscale: boolean;
   attachmentFolder: string;
+  isBuiltin?: boolean; // built-in presets cannot be deleted or renamed
 }
 
 export const CONVERTER_OPTIONS = [
   { value: ConverterType.WASM_WEBP, label: "WASM WebP", description: "WebP conversion using WebAssembly" },
   { value: ConverterType.CANVAS_JPEG, label: "JPEG", description: "JPEG conversion using Canvas API" },
   { value: ConverterType.CANVAS_PNG, label: "PNG", description: "Lossless PNG conversion using Canvas API" },
-  // Future options:
-  // { value: ConverterType.WASM_AVIF, label: "WASM AVIF", description: "AVIF conversion using WebAssembly" },
+  { value: ConverterType.WASM_AVIF, label: "WASM AVIF", description: "AVIF conversion using WebAssembly (downloaded on first use)" },
 ];
 
 /** Returns the file extension for a given converter type */
@@ -30,6 +29,7 @@ export function getExtensionForConverter(converterType: ConverterType): string {
   switch (converterType) {
     case ConverterType.CANVAS_PNG: return "png";
     case ConverterType.CANVAS_JPEG: return "jpg";
+    case ConverterType.WASM_AVIF: return "avif";
     case ConverterType.WASM_WEBP:
     default: return "webp";
   }
@@ -48,7 +48,7 @@ export interface ConverterSettings {
   batchConvertExtensions: string[]; // バッチ変換対象の拡張子
   processAnimatedGifs: boolean; // アニメーションGIFを変換するかどうか（変換すると静止画になる）
   autoConvertPreset: string; // 自動変換時に使用するプリセット名
-  enableAutoOrganizeImages: boolean; // 新規画像の自動整理
+  enableSampledPrediction: boolean; // サイズ予測をサンプル実エンコードで精緻化する
   presets: PresetSettings[]; // プリセット
 }
 
@@ -61,10 +61,50 @@ export const DEFAULT_PRESET: PresetSettings = {
   enableResize: true,
   enableGrayscale: false,
   attachmentFolder: "Attachments",
+  isBuiltin: true,
+};
+
+export const BUILTIN_PRESET_PHOTO: PresetSettings = {
+  name: "Photo",
+  converterType: ConverterType.WASM_AVIF,
+  quality: 0.75,
+  maxWidth: 1920,
+  maxHeight: 1080,
+  enableResize: true,
+  enableGrayscale: false,
+  attachmentFolder: "Attachments",
+  isBuiltin: true,
+};
+
+export const BUILTIN_PRESET_ILLUSTRATION: PresetSettings = {
+  name: "Illustration",
+  converterType: ConverterType.WASM_WEBP,
+  quality: 0.9,
+  maxWidth: 1920,
+  maxHeight: 1080,
+  enableResize: true,
+  enableGrayscale: false,
+  attachmentFolder: "Attachments",
+  isBuiltin: true,
+};
+
+export const BUILTIN_PRESET_DOCUMENT: PresetSettings = {
+  name: "Document",
+  converterType: ConverterType.WASM_WEBP,
+  quality: 0.5,
+  maxWidth: 1200,
+  maxHeight: 1600,
+  enableResize: true,
+  enableGrayscale: true,
+  attachmentFolder: "Attachments",
+  isBuiltin: true,
 };
 
 export const DEFAULT_PRESETS: PresetSettings[] = [
   DEFAULT_PRESET,
+  BUILTIN_PRESET_PHOTO,
+  BUILTIN_PRESET_ILLUSTRATION,
+  BUILTIN_PRESET_DOCUMENT,
 ];
 
 export const DEFAULT_SETTINGS: ConverterSettings = {
@@ -77,9 +117,9 @@ export const DEFAULT_SETTINGS: ConverterSettings = {
   autoReadClipboard: false, // デフォルトはオフ（iPadでの問題回避）
   enableGrayscale: DEFAULT_PRESET.enableGrayscale,
   enableAutoConvert: false, // デフォルトはオフ（従来動作を維持）
-  batchConvertExtensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'], // デフォルトは全対象
+  batchConvertExtensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp'], // デフォルトは全対象（tiffはChromiumがデコード不可のため除外）
   processAnimatedGifs: false, // デフォルトは変換しない（アニメーション保持）
   autoConvertPreset: "Default", // デフォルトプリセットを使用
-  enableAutoOrganizeImages: false, // デフォルトはオフ
+  enableSampledPrediction: true, // デフォルトはオン（低速端末ではオフ推奨）
   presets: [...DEFAULT_PRESETS], // デフォルトプリセット
 };
