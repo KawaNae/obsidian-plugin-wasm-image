@@ -79,7 +79,20 @@ const fixJsquash = {
         code.match(/["']([^"']*webp_enc[^"']*\.wasm)["']/)?.[1] ||
         code.match(/["']([^"']*\.wasm)["']/)?.[1];
 
-      if (wasmRel) {
+      if (wasmRel && /(?:^|[/\\])webp_enc\.wasm$/.test(wasmRel)) {
+        // 非SIMD版はバンドルしない（非SIMD環境でのみ実行時ダウンロード。
+        // webp-converter.ts の nonSimdFallback が init(module) で供給する）
+        code = code.replace(
+          /new\s+URL\s*\(\s*[^,]+,\s*(?:import\.meta|import_meta)\.url\s*\)/g,
+          'new URL("data:,")'
+        );
+        code = code.replace(
+          /wasmBinaryFile\s*=\s*["'][^"']*\.wasm["']\s*;/g,
+          'wasmBinaryFile = "data:,";'
+        );
+
+        console.log(`[stub] ${path.basename(args.path)} -> ${wasmRel} (runtime download)`);
+      } else if (wasmRel) {
         const wasmAbs = path.join(dir, wasmRel);
         const wasmBin = await fs.promises.readFile(wasmAbs);
         const dataPrefix = "data:application/octet-stream;base64,";

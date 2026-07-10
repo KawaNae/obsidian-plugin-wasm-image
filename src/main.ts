@@ -5,7 +5,7 @@ import { WasmImageConverterSettingTab } from "./settings-tab";
 import { sizePredictionService } from "./prediction/size-predictor";
 import { WebPSizePredictor } from "./prediction/webp-predictor";
 import { JPEGSizePredictor, PNGSizePredictor, AVIFSizePredictor } from "./prediction/canvas-predictor";
-import { initAvifLoader } from "./converters/avif-wasm-loader";
+import { initWasmLoaderContext } from "./converters/wasm-loader";
 import { saveImageAndInsert, saveOriginalFile, convertAndReplaceFile } from "./file-service";
 import { isAnimatedGif } from "./utils/gif-check";
 
@@ -21,8 +21,8 @@ export default class WasmImageConverterPlugin extends Plugin {
     sizePredictionService.registerPredictor(new PNGSizePredictor());
     sizePredictionService.registerPredictor(new AVIFSizePredictor());
 
-    // Initialize AVIF WASM loader (stores references only, no download yet)
-    initAvifLoader(this.app, this.manifest.dir!);
+    // Initialize remote WASM loaders (stores references only, no download yet)
+    initWasmLoaderContext(this.app, this.manifest.dir!);
 
     this.addSettingTab(new WasmImageConverterSettingTab(this.app, this));
 

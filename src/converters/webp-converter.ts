@@ -1,5 +1,38 @@
-import webpEncode from "@jsquash/webp/encode";
+import webpEncode, { init as initWebPEncode } from "@jsquash/webp/encode";
+import { simd } from "wasm-feature-detect";
 import { convertToGrayscale } from "./grayscale";
+import { createRemoteWasmLoader } from "./wasm-loader";
+
+// must match @jsquash/webp version in package.json
+const WEBP_WASM_VERSION = "1.4.0";
+
+// Only the SIMD build is embedded in main.js. The rare devices without
+// WASM SIMD support download the plain build once instead.
+const nonSimdFallback = createRemoteWasmLoader({
+  filename: "webp_enc.wasm",
+  url: `https://unpkg.com/@jsquash/webp@${WEBP_WASM_VERSION}/codec/enc/webp_enc.wasm`,
+  downloadNotice: "Downloading WebP encoder (~0.3 MB)... This only happens once.",
+  readyNotice: "WebP encoder ready!",
+  errorMessage: "Failed to download the WebP encoder. Check your internet connection.",
+});
+
+let webpInitPromise: Promise<void> | null = null;
+
+/**
+ * On SIMD-capable environments the embedded SIMD build initializes itself
+ * inside webpEncode. Elsewhere the package picks its non-SIMD glue, whose
+ * binary is not bundled — provide it via download. Both sides branch on the
+ * same wasm-feature-detect simd() check, so glue and binary always match.
+ */
+function ensureWebPEncoder(): Promise<void> {
+  if (!webpInitPromise) {
+    webpInitPromise = (async () => {
+      if (await simd()) return;
+      await initWebPEncode(await nonSimdFallback.getModule());
+    })().catch(err => { webpInitPromise = null; throw err; });
+  }
+  return webpInitPromise;
+}
 
 export interface ImageProcessingOptions {
   quality: number; // 0.1 - 1.0
@@ -43,6 +76,8 @@ export async function convertImageToWebP(
       maxHeight: maxHeight!,
       enableGrayscale: enableGrayscale
     };
+
+  await ensureWebPEncoder();
 
   // 画像ロード（createImageBitmap → <img> フォールバック）
   const bmp = await (async () => {
