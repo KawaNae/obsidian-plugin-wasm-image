@@ -86,6 +86,16 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
         }));
 
     new Setting(el)
+      .setName("Accurate size prediction")
+      .setDesc("Refine the size estimate in the converter dialog with a quick sample encode. Turn off on low-power devices to keep the dialog snappy (a formula-based estimate is always shown instantly).")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.enableSampledPrediction)
+        .onChange(async (value) => {
+          this.plugin.settings.enableSampledPrediction = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(el)
       .setName("Auto-convert on drag & drop")
       .setDesc("Automatically convert images when dragging and dropping them into the editor (desktop only)")
       .addToggle(toggle => toggle

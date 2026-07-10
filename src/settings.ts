@@ -48,6 +48,7 @@ export interface ConverterSettings {
   batchConvertExtensions: string[]; // バッチ変換対象の拡張子
   processAnimatedGifs: boolean; // アニメーションGIFを変換するかどうか（変換すると静止画になる）
   autoConvertPreset: string; // 自動変換時に使用するプリセット名
+  enableSampledPrediction: boolean; // サイズ予測をサンプル実エンコードで精緻化する
   presets: PresetSettings[]; // プリセット
 }
 
@@ -119,5 +120,6 @@ export const DEFAULT_SETTINGS: ConverterSettings = {
   batchConvertExtensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp'], // デフォルトは全対象（tiffはChromiumがデコード不可のため除外）
   processAnimatedGifs: false, // デフォルトは変換しない（アニメーション保持）
   autoConvertPreset: "Default", // デフォルトプリセットを使用
+  enableSampledPrediction: true, // デフォルトはオン（低速端末ではオフ推奨）
   presets: [...DEFAULT_PRESETS], // デフォルトプリセット
 };

@@ -1,7 +1,8 @@
 import { App, Modal, Notice, setIcon, TFile } from "obsidian";
 import { ConverterSettings } from "../settings";
 import { saveImageAndInsert, convertAndReplaceFile } from "../file-service";
-import { sizePredictionService } from "../prediction/size-predictor";
+import { sizePredictionService, SizePredictionResult } from "../prediction/size-predictor";
+import { predictBySampleEncode } from "../prediction/sampled-predictor";
 
 import { isAnimatedGif } from "../utils/gif-check";
 import { DropZone } from "./components/drop-zone";
@@ -228,47 +229,79 @@ class ImageConverterModal extends Modal {
             return;
         }
 
-        if (this.selectedFiles.length === 1) {
-            // Single file: show detailed info
-            const file = this.selectedFiles[0];
-            const originalKB = (file.size / 1024).toFixed(1);
-
-            let predictionText = '';
-            try {
-                const predictionResult = await sizePredictionService.predictSize(file, {
-                    converterType: this.settingsPanel.converterType,
-                    quality: this.settingsPanel.quality,
-                    enableGrayscale: this.settingsPanel.enableGrayscale,
-                    enableResize: this.settingsPanel.enableResize,
-                    maxWidth: this.settingsPanel.maxWidth,
-                    maxHeight: this.settingsPanel.maxHeight
-                });
-
-                if (predictionResult) {
-                    const predictedKB = (predictionResult.predictedSize / 1024).toFixed(1);
-                    const delta = Math.round((predictionResult.predictedSize - file.size) / file.size * 100);
-                    const deltaText = delta <= 0 ? `-${-delta}%` : `+${delta}%`;
-                    predictionText = ` → Expected: ${predictedKB}kB (${deltaText})`;
-                }
-            } catch (error) {
-                console.warn('Size prediction failed:', error);
-            }
-
-            // A newer prediction request superseded this one
-            if (generation !== this.predictionGeneration) return;
-
-            this.infoDiv.textContent = '';
-            this.infoDiv.appendChild(document.createTextNode(`${file.name}: ${originalKB}kB`));
-            if (predictionText) {
-                const span = document.createElement('span');
-                span.style.color = 'var(--text-accent)';
-                span.textContent = predictionText;
-                this.infoDiv.appendChild(span);
-            }
-        } else {
-            // Multiple files: show aggregate info
+        if (this.selectedFiles.length !== 1) {
             const totalSizeKB = (this.selectedFiles.reduce((sum, f) => sum + f.size, 0) / 1024).toFixed(1);
             this.infoDiv.textContent = `${this.selectedFiles.length} images selected (${totalSizeKB}kB total)`;
+            return;
+        }
+
+        const file = this.selectedFiles[0];
+        const predictionOptions = {
+            converterType: this.settingsPanel.converterType,
+            quality: this.settingsPanel.quality,
+            enableGrayscale: this.settingsPanel.enableGrayscale,
+            enableResize: this.settingsPanel.enableResize,
+            maxWidth: this.settingsPanel.maxWidth,
+            maxHeight: this.settingsPanel.maxHeight
+        };
+
+        const useSampled = this.settings.enableSampledPrediction;
+
+        // Phase 1: instant heuristic estimate
+        let heuristic: SizePredictionResult | null = null;
+        try {
+            heuristic = await sizePredictionService.predictSize(file, predictionOptions);
+        } catch (error) {
+            console.warn('Size prediction failed:', error);
+        }
+        if (generation !== this.predictionGeneration) return;
+
+        if (!useSampled) {
+            this.renderPredictionLine(file, heuristic, false);
+            return;
+        }
+
+        // Two-phase mode: show the heuristic with a spinner immediately,
+        // then replace with the sampled result. A minimum display time of
+        // 300ms prevents the spinner from flickering too fast to read.
+        this.renderPredictionLine(file, heuristic, true);
+        const shownAt = performance.now();
+
+        const refined = await predictBySampleEncode(file, predictionOptions);
+        if (generation !== this.predictionGeneration) return;
+
+        const elapsed = performance.now() - shownAt;
+        if (elapsed < 300) {
+            await new Promise(r => setTimeout(r, 300 - elapsed));
+            if (generation !== this.predictionGeneration) return;
+        }
+
+        this.renderPredictionLine(file, refined ?? heuristic, false);
+    }
+
+    /**
+     * @param loading - when true, shows a spinner and uses a rounded
+     *   approximate value to signal "still refining"
+     */
+    private renderPredictionLine(file: File, prediction: SizePredictionResult | null, loading: boolean) {
+        const originalKB = (file.size / 1024).toFixed(1);
+        this.infoDiv.textContent = '';
+        this.infoDiv.appendChild(document.createTextNode(`${file.name}: ${originalKB}kB`));
+        if (prediction) {
+            const predictedKB = loading
+                ? `~${Math.round(prediction.predictedSize / 1024)}`
+                : (prediction.predictedSize / 1024).toFixed(1);
+            const delta = Math.round((prediction.predictedSize - file.size) / file.size * 100);
+            const deltaText = delta <= 0 ? `-${-delta}%` : `+${delta}%`;
+            const span = document.createElement('span');
+            span.style.color = loading ? 'var(--text-muted)' : 'var(--text-accent)';
+            span.textContent = ` → Expected: ${predictedKB}kB (${deltaText})`;
+            this.infoDiv.appendChild(span);
+            if (loading) {
+                const spinner = document.createElement('span');
+                spinner.className = 'wasm-image-prediction-spinner';
+                this.infoDiv.appendChild(spinner);
+            }
         }
     }
 
