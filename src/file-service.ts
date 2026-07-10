@@ -180,22 +180,33 @@ export async function replaceFileContentAndPath(
 ): Promise<ConversionResult> {
   const originalSize = targetFile.stat.size;
 
-  // Overwrite content
-  const arrayBuffer = await newContent.arrayBuffer();
-  await app.vault.modifyBinary(targetFile, arrayBuffer);
+  // Keep original bytes so a failure after the overwrite can be rolled back
+  const originalData = await app.vault.readBinary(targetFile);
 
-  // Generate new path
+  // Generate new path and ensure the folder exists before touching the file
   folder = normalizePath(folder);
   const fileName = generateFileName(newExtension, newContent.size);
   const destPath = normalizePath(`${folder}/${fileName}`);
-
-  // Ensure folder exists
   if (!(await app.vault.adapter.exists(folder))) {
     await app.vault.adapter.mkdir(folder);
   }
 
+  // Overwrite content
+  const arrayBuffer = await newContent.arrayBuffer();
+  await app.vault.modifyBinary(targetFile, arrayBuffer);
+
   // Rename/Move file (triggers link updates)
-  await app.fileManager.renameFile(targetFile, destPath);
+  try {
+    await app.fileManager.renameFile(targetFile, destPath);
+  } catch (renameError) {
+    // Restore the original bytes so no corrupted file is left behind
+    try {
+      await app.vault.modifyBinary(targetFile, originalData);
+    } catch (rollbackError) {
+      console.error("Rollback after failed rename also failed:", rollbackError);
+    }
+    throw renameError;
+  }
 
   return {
     path: destPath,

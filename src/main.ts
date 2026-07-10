@@ -1,12 +1,12 @@
 import { Notice, Plugin, Editor, Platform, MarkdownView, TFile, Modal, normalizePath } from "obsidian";
-import { ConverterSettings, ConverterType, DEFAULT_SETTINGS, DEFAULT_PRESETS, BUILTIN_PRESET_NAMES, getExtensionForConverter } from "./settings";
+import { ConverterSettings, ConverterType, DEFAULT_SETTINGS, DEFAULT_PRESETS, getExtensionForConverter } from "./settings";
 import { openImageConverterModal } from "./ui/image-converter-modal";
 import { WasmImageConverterSettingTab } from "./settings-tab";
 import { sizePredictionService } from "./prediction/size-predictor";
 import { WebPSizePredictor } from "./prediction/webp-predictor";
 import { JPEGSizePredictor, PNGSizePredictor, AVIFSizePredictor } from "./prediction/canvas-predictor";
 import { initAvifLoader } from "./converters/avif-wasm-loader";
-import { saveImageAndInsert, saveOriginalFile } from "./file-service";
+import { saveImageAndInsert, saveOriginalFile, convertAndReplaceFile } from "./file-service";
 import { isAnimatedGif } from "./utils/gif-check";
 
 export default class WasmImageConverterPlugin extends Plugin {
@@ -73,7 +73,7 @@ export default class WasmImageConverterPlugin extends Plugin {
       this.app.workspace.on("file-menu", (menu, file) => {
         if (!(file instanceof TFile)) return;
 
-        const supportedExtensions = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'webp'];
+        const supportedExtensions = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'];
         if (supportedExtensions.includes(file.extension.toLowerCase())) {
           menu.addItem((item) => {
             const ext = getExtensionForConverter(this.settings.converterType).toUpperCase();
@@ -113,6 +113,26 @@ export default class WasmImageConverterPlugin extends Plugin {
 
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+
+    // Migration: older versions had no isBuiltin flag. "Default" was always
+    // protected there (even if the user edited its fields). Other presets are
+    // treated as built-in only when every field matches the built-in
+    // definition; a user preset that merely shares the name stays custom
+    // (and blocks that built-in from being added below).
+    for (const preset of this.settings.presets) {
+      if (preset.isBuiltin === undefined) {
+        const builtin = DEFAULT_PRESETS.find(b => b.name === preset.name);
+        preset.isBuiltin = preset.name === "Default" || (!!builtin &&
+          builtin.converterType === preset.converterType &&
+          builtin.quality === preset.quality &&
+          builtin.maxWidth === preset.maxWidth &&
+          builtin.maxHeight === preset.maxHeight &&
+          builtin.enableResize === preset.enableResize &&
+          builtin.enableGrayscale === preset.enableGrayscale &&
+          builtin.attachmentFolder === preset.attachmentFolder);
+      }
+    }
+
     // Ensure all built-in presets exist (for users upgrading from older versions)
     const existingNames = new Set(this.settings.presets.map(p => p.name));
     for (const builtin of DEFAULT_PRESETS) {
@@ -120,6 +140,10 @@ export default class WasmImageConverterPlugin extends Plugin {
         this.settings.presets.push({ ...builtin });
       }
     }
+
+    // Migration: tiff cannot be decoded by the renderer, drop it from targets
+    this.settings.batchConvertExtensions =
+      this.settings.batchConvertExtensions.filter(ext => ext !== 'tiff');
   }
 
   async saveSettings() {
@@ -269,72 +293,28 @@ export default class WasmImageConverterPlugin extends Plugin {
       throw new Error('No preset found');
     }
 
-    // Import conversion functions
-    const { convertImageToWebP } = await import('./converters/webp-converter');
-    const { convertImageWithCanvas } = await import('./converters/canvas-converter');
-    const { convertImageToAVIF } = await import('./converters/avif-converter');
-    const { createProcessingOptions } = await import('./file-service');
-
     // Read the original file
-    const originalSize = imageFile.stat.size;
     const arrayBuffer = await this.app.vault.readBinary(imageFile);
     const blob = new Blob([arrayBuffer], { type: `image/${imageFile.extension}` });
     const file = new File([blob], imageFile.name, { type: blob.type });
 
-    // Convert using the preset's converter type
-    const processingOptions = createProcessingOptions(this.settings, {
-      quality: selectedPreset.quality,
-      enableResize: selectedPreset.enableResize,
-      maxWidth: selectedPreset.maxWidth,
-      maxHeight: selectedPreset.maxHeight,
-      enableGrayscale: selectedPreset.enableGrayscale
-    });
-
-    let convertedBlob: Blob;
-    const converterType = selectedPreset.converterType;
-
-    switch (converterType) {
-      case ConverterType.CANVAS_PNG:
-        convertedBlob = await convertImageWithCanvas(file, "image/png", processingOptions);
-        break;
-      case ConverterType.CANVAS_JPEG:
-        convertedBlob = await convertImageWithCanvas(file, "image/jpeg", processingOptions);
-        break;
-      case ConverterType.WASM_AVIF:
-        convertedBlob = await convertImageToAVIF(file, processingOptions);
-        break;
-      case ConverterType.WASM_WEBP:
-      default:
-        convertedBlob = await convertImageToWebP(file, processingOptions);
-        break;
-    }
-
-    const convertedSize = convertedBlob.size;
-    const fileExtension = getExtensionForConverter(converterType);
-
-    // Overwrite original file with converted data
-    const convertedArrayBuffer = await convertedBlob.arrayBuffer();
-    await this.app.vault.modifyBinary(imageFile, convertedArrayBuffer);
-
-    // Generate new path in attachment folder
-    const folder = normalizePath(selectedPreset.attachmentFolder);
-    const timestamp = (window as any).moment().format("YYYYMMDD[T]HHmmssSSS");
-    const sizeKB = (convertedSize / 1024).toFixed(2);
-    const fileName = `IMG-${timestamp}-${sizeKB}.${fileExtension}`;
-    const destPath = normalizePath(`${folder}/${fileName}`);
-
-    // Create folder if it doesn't exist
-    if (!(await this.app.vault.adapter.exists(folder))) {
-      await this.app.vault.adapter.mkdir(folder);
-    }
-
-    // Rename the file to new location
-    // This triggers Obsidian's automatic link update
-    await this.app.fileManager.renameFile(imageFile, destPath);
+    const settings = { ...this.settings, attachmentFolder: selectedPreset.attachmentFolder };
+    const result = await convertAndReplaceFile(
+      this.app,
+      imageFile,
+      file,
+      settings,
+      selectedPreset.quality,
+      selectedPreset.enableResize,
+      selectedPreset.maxWidth,
+      selectedPreset.maxHeight,
+      selectedPreset.enableGrayscale,
+      selectedPreset.converterType
+    );
 
     return {
-      originalSize,
-      convertedSize
+      originalSize: result.originalSize,
+      convertedSize: result.convertedSize
     };
   }
 
@@ -600,113 +580,6 @@ export default class WasmImageConverterPlugin extends Plugin {
         console.error("Auto-conversion failed:", error);
         new Notice(`❌ Auto-conversion failed for ${file.name}`);
       }
-    }
-  }
-
-  // ===== Auto-Organize Images =====
-
-  setupAutoOrganizeImages() {
-    if (!this.settings.enableAutoOrganizeImages) {
-      return;
-    }
-
-    this.registerEvent(
-      this.app.vault.on('create', async (file) => {
-        // Only process TFile objects
-        if (!(file instanceof TFile)) {
-          return;
-        }
-
-        // Check if this is a supported image file
-        if (!this.isSupportedImageFile(file)) {
-          return;
-        }
-
-        // Wait a bit to ensure the file is fully written
-        await new Promise(resolve => setTimeout(resolve, 300));
-
-        try {
-          await this.organizeImage(file);
-        } catch (error) {
-          console.error('[Auto-Organize] Failed to organize image:', error);
-          new Notice(`❌ Failed to organize ${file.name}`);
-        }
-      })
-    );
-  }
-
-  private isSupportedImageFile(file: TFile): boolean {
-    return this.settings.batchConvertExtensions.includes(file.extension.toLowerCase());
-  }
-
-  private async organizeImage(imageFile: TFile): Promise<void> {
-    try {
-      // Check for animated GIF
-      if (imageFile.extension.toLowerCase() === 'gif') {
-        const arrayBuffer = await this.app.vault.readBinary(imageFile);
-        const blob = new Blob([arrayBuffer]);
-        if (await isAnimatedGif(blob)) {
-          if (!this.settings.processAnimatedGifs) {
-            return;
-          }
-        }
-      }
-
-      // Get the selected preset
-      const selectedPreset = this.settings.presets.find(
-        p => p.name === this.settings.autoConvertPreset
-      ) || this.settings.presets.find(p => p.name === "Default")
-        || this.settings.presets[0];
-
-      if (!selectedPreset) {
-        console.warn('[Auto-Organize] No preset found');
-        return;
-      }
-
-      // Read the original file
-      const arrayBuffer = await this.app.vault.readBinary(imageFile);
-      const blob = new Blob([arrayBuffer], { type: `image/${imageFile.extension}` });
-      const file = new File([blob], imageFile.name, { type: blob.type });
-
-      // Convert to WebP
-      const settings = {
-        ...this.settings,
-        attachmentFolder: selectedPreset.attachmentFolder
-      };
-
-      const result = await saveImageAndInsert(
-        this.app,
-        file,
-        settings,
-        selectedPreset.quality,
-        selectedPreset.enableResize,
-        selectedPreset.maxWidth,
-        selectedPreset.maxHeight,
-        selectedPreset.enableGrayscale,
-        selectedPreset.converterType
-      );
-
-      // Get the converted file
-      const convertedFile = this.app.vault.getAbstractFileByPath(result.path);
-      if (!(convertedFile instanceof TFile)) {
-        throw new Error('Converted file not found');
-      }
-
-      // Rename the original file to match the converted file location
-      // This will trigger Obsidian's automatic link update
-      await this.app.fileManager.renameFile(convertedFile, imageFile.path);
-
-      // Show success notification
-      const originalKB = (result.originalSize / 1024).toFixed(2);
-      const convertedKB = (result.convertedSize / 1024).toFixed(2);
-      const ratio = (((result.originalSize - result.convertedSize) / result.originalSize) * 100).toFixed(1);
-
-      new Notice(
-        `✅ Auto-organized: ${imageFile.name} → ${originalKB}KB → ${convertedKB}KB (${ratio}% compressed)`
-      );
-    } catch (error) {
-      console.error('[Auto-Organize] Failed to organize image:', error);
-      throw error;
     }
   }
 

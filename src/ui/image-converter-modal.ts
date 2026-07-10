@@ -6,7 +6,6 @@ import { sizePredictionService } from "../prediction/size-predictor";
 import { isAnimatedGif } from "../utils/gif-check";
 import { DropZone } from "./components/drop-zone";
 import { SettingsPanel } from "./components/settings-panel";
-import { PreviewArea } from "./components/preview-area";
 
 export async function openImageConverterModal(app: App, baseSettings: ConverterSettings, initialFile: File | null = null, targetTFile: TFile | null = null): Promise<string | undefined> {
     // Clone settings
@@ -85,7 +84,10 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
         progressContainer.appendChild(progressBar);
         progressContainer.appendChild(progressText);
 
+        let predictionGeneration = 0;
         const updatePrediction = async () => {
+            const generation = ++predictionGeneration;
+
             if (selectedFiles.length === 0) {
                 infoDiv.textContent = "";
                 return;
@@ -109,12 +111,16 @@ export async function openImageConverterModal(app: App, baseSettings: ConverterS
 
                     if (predictionResult) {
                         const predictedKB = (predictionResult.predictedSize / 1024).toFixed(1);
-                        const compressionRatio = ((file.size - predictionResult.predictedSize) / file.size * 100).toFixed(0);
-                        predictionText = ` \u2192 Expected: ${predictedKB}kB (-${compressionRatio}%)`;
+                        const delta = Math.round((predictionResult.predictedSize - file.size) / file.size * 100);
+                        const deltaText = delta <= 0 ? `-${-delta}%` : `+${delta}%`;
+                        predictionText = ` \u2192 Expected: ${predictedKB}kB (${deltaText})`;
                     }
                 } catch (error) {
                     console.warn('Size prediction failed:', error);
                 }
+
+                // A newer prediction request superseded this one
+                if (generation !== predictionGeneration) return;
 
                 infoDiv.textContent = '';
                 infoDiv.appendChild(document.createTextNode(`${file.name}: ${originalKB}kB`));

@@ -1,6 +1,6 @@
 import { App, Notice, PluginSettingTab, Setting, Modal } from "obsidian";
 import WasmImageConverterPlugin from "./main";
-import { PresetSettings, DEFAULT_PRESETS, DEFAULT_PRESET, ConverterType, CONVERTER_OPTIONS, BUILTIN_PRESET_NAMES } from "./settings";
+import { PresetSettings, DEFAULT_PRESETS, ConverterType, CONVERTER_OPTIONS } from "./settings";
 
 export class WasmImageConverterSettingTab extends PluginSettingTab {
   plugin: WasmImageConverterPlugin;
@@ -122,7 +122,7 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
     targetExtDesc.style.marginBottom = "10px";
 
     const extensionsContainer = el.createDiv('batch-convert-extensions-container');
-    const availableExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'];
+    const availableExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp'];
 
     availableExtensions.forEach(ext => {
       if (ext === 'gif') {
@@ -207,7 +207,7 @@ export class WasmImageConverterSettingTab extends PluginSettingTab {
     }
 
     this.plugin.settings.presets.forEach((preset, index) => {
-      const isBuiltin = BUILTIN_PRESET_NAMES.has(preset.name);
+      const isBuiltin = preset.isBuiltin === true;
       const converterLabel = CONVERTER_OPTIONS.find(opt => opt.value === preset.converterType)?.label || preset.converterType;
 
       new Setting(el)
@@ -363,7 +363,7 @@ class PresetEditModal extends Modal {
     let enableGrayscale: boolean = this.preset?.enableGrayscale ?? false;
     let attachmentFolder = this.preset?.attachmentFolder || "Attachments";
 
-    const isBuiltin = this.preset ? BUILTIN_PRESET_NAMES.has(this.preset.name) : false;
+    const isBuiltin = this.preset?.isBuiltin === true;
 
     new Setting(contentEl)
       .setName("Preset Name")
@@ -488,6 +488,7 @@ class PresetEditModal extends Modal {
             enableResize,
             enableGrayscale,
             attachmentFolder,
+            isBuiltin: this.preset?.isBuiltin,
           };
 
           if (this.isEditing && this.preset) {

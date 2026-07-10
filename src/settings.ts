@@ -14,6 +14,7 @@ export interface PresetSettings {
   enableResize: boolean;
   enableGrayscale: boolean;
   attachmentFolder: string;
+  isBuiltin?: boolean; // built-in presets cannot be deleted or renamed
 }
 
 export const CONVERTER_OPTIONS = [
@@ -47,7 +48,6 @@ export interface ConverterSettings {
   batchConvertExtensions: string[]; // バッチ変換対象の拡張子
   processAnimatedGifs: boolean; // アニメーションGIFを変換するかどうか（変換すると静止画になる）
   autoConvertPreset: string; // 自動変換時に使用するプリセット名
-  enableAutoOrganizeImages: boolean; // 新規画像の自動整理
   presets: PresetSettings[]; // プリセット
 }
 
@@ -60,6 +60,7 @@ export const DEFAULT_PRESET: PresetSettings = {
   enableResize: true,
   enableGrayscale: false,
   attachmentFolder: "Attachments",
+  isBuiltin: true,
 };
 
 export const BUILTIN_PRESET_PHOTO: PresetSettings = {
@@ -71,6 +72,7 @@ export const BUILTIN_PRESET_PHOTO: PresetSettings = {
   enableResize: true,
   enableGrayscale: false,
   attachmentFolder: "Attachments",
+  isBuiltin: true,
 };
 
 export const BUILTIN_PRESET_ILLUSTRATION: PresetSettings = {
@@ -82,6 +84,7 @@ export const BUILTIN_PRESET_ILLUSTRATION: PresetSettings = {
   enableResize: true,
   enableGrayscale: false,
   attachmentFolder: "Attachments",
+  isBuiltin: true,
 };
 
 export const BUILTIN_PRESET_DOCUMENT: PresetSettings = {
@@ -93,15 +96,8 @@ export const BUILTIN_PRESET_DOCUMENT: PresetSettings = {
   enableResize: true,
   enableGrayscale: true,
   attachmentFolder: "Attachments",
+  isBuiltin: true,
 };
-
-/** Names of built-in presets that cannot be deleted */
-export const BUILTIN_PRESET_NAMES = new Set([
-  DEFAULT_PRESET.name,
-  BUILTIN_PRESET_PHOTO.name,
-  BUILTIN_PRESET_ILLUSTRATION.name,
-  BUILTIN_PRESET_DOCUMENT.name,
-]);
 
 export const DEFAULT_PRESETS: PresetSettings[] = [
   DEFAULT_PRESET,
@@ -120,9 +116,8 @@ export const DEFAULT_SETTINGS: ConverterSettings = {
   autoReadClipboard: false, // デフォルトはオフ（iPadでの問題回避）
   enableGrayscale: DEFAULT_PRESET.enableGrayscale,
   enableAutoConvert: false, // デフォルトはオフ（従来動作を維持）
-  batchConvertExtensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'], // デフォルトは全対象
+  batchConvertExtensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp'], // デフォルトは全対象（tiffはChromiumがデコード不可のため除外）
   processAnimatedGifs: false, // デフォルトは変換しない（アニメーション保持）
   autoConvertPreset: "Default", // デフォルトプリセットを使用
-  enableAutoOrganizeImages: false, // デフォルトはオフ
   presets: [...DEFAULT_PRESETS], // デフォルトプリセット
 };
