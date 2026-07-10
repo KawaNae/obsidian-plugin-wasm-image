@@ -1,4 +1,4 @@
-import { App, normalizePath, TFile } from "obsidian";
+import { App, normalizePath, TFile, TFolder } from "obsidian";
 import { ConverterSettings, ConverterType, getExtensionForConverter } from "./settings";
 import { convertImageToWebP, ImageProcessingOptions } from "./converters/webp-converter";
 import { convertImageWithCanvas } from "./converters/canvas-converter";
@@ -22,6 +22,33 @@ export function createProcessingOptions(
     enableGrayscale: settings.enableGrayscale,
     ...overrides
   };
+}
+
+/**
+ * Ensures a folder exists using the Vault API so Obsidian's file index
+ * knows about it immediately (adapter.mkdir bypasses the index).
+ */
+async function ensureFolder(app: App, folder: string): Promise<void> {
+  if (app.vault.getAbstractFileByPath(folder) instanceof TFolder) return;
+  try {
+    await app.vault.createFolder(folder);
+  } catch (e) {
+    // Another writer may have created it concurrently
+    if (!(app.vault.getAbstractFileByPath(folder) instanceof TFolder)) throw e;
+  }
+}
+
+/**
+ * Creates a binary file via the Vault API, deduplicating the name on the
+ * (unlikely) chance the timestamp-based name already exists.
+ */
+async function createBinaryFile(app: App, destPath: string, data: ArrayBuffer): Promise<string> {
+  let path = destPath;
+  for (let i = 1; app.vault.getAbstractFileByPath(path) && i < 10; i++) {
+    path = destPath.replace(/(\.[^.]+)$/, `-${i}$1`);
+  }
+  await app.vault.createBinary(path, data);
+  return path;
 }
 
 export async function saveImageAndInsert(
@@ -72,14 +99,11 @@ export async function saveImageAndInsert(
   const fileName = generateFileName(fileExtension, convertedBlob.size);
   const destPath = normalizePath(`${folder}/${fileName}`);
 
-  // フォルダ無ければ作成
-  if (!(await app.vault.adapter.exists(folder))) {
-    await app.vault.adapter.mkdir(folder);
-  }
+  await ensureFolder(app, folder);
   const ab = await convertedBlob.arrayBuffer();
-  await app.vault.adapter.writeBinary(destPath, ab);
+  const savedPath = await createBinaryFile(app, destPath, ab);
 
-  return { path: destPath, originalSize: file.size, convertedSize: convertedBlob.size };
+  return { path: savedPath, originalSize: file.size, convertedSize: convertedBlob.size };
 }
 
 /**
@@ -102,15 +126,9 @@ export async function saveOriginalFile(app: App, file: File, folder: string): Pr
   const fileName = generateFileName(extension, file.size);
   const destPath = normalizePath(`${folder}/${fileName}`);
 
-  // Create folder if it doesn't exist
-  if (!(await app.vault.adapter.exists(folder))) {
-    await app.vault.adapter.mkdir(folder);
-  }
-
+  await ensureFolder(app, folder);
   const arrayBuffer = await file.arrayBuffer();
-  await app.vault.adapter.writeBinary(destPath, arrayBuffer);
-
-  return destPath;
+  return await createBinaryFile(app, destPath, arrayBuffer);
 }
 
 /**
@@ -187,9 +205,7 @@ export async function replaceFileContentAndPath(
   folder = normalizePath(folder);
   const fileName = generateFileName(newExtension, newContent.size);
   const destPath = normalizePath(`${folder}/${fileName}`);
-  if (!(await app.vault.adapter.exists(folder))) {
-    await app.vault.adapter.mkdir(folder);
-  }
+  await ensureFolder(app, folder);
 
   // Overwrite content
   const arrayBuffer = await newContent.arrayBuffer();
